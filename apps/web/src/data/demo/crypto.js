@@ -1,14 +1,8 @@
-// Utilidades criptográficas (Web Crypto).
-// En producción todo esto vive en el servidor: el navegador sólo envía el correo y la contraseña por HTTPS,
-// y el servidor guarda el hash (Argon2id o PBKDF2), emite la sesión en una cookie HttpOnly y aplica los límites.
+// Criptografía del modo demo (Web Crypto). Sólo simula al servidor dentro del navegador:
+// con la API, las contraseñas se guardan con Argon2id en el servidor y la sesión vive en una cookie HttpOnly.
+import { SECURITY } from '@residencial/shared';
+
 export const PBKDF2_ITERATIONS = 120000;
-export const MAX_LOGIN_ATTEMPTS = 5;
-export const LOCK_MINUTES = 15;
-export const INVITE_HOURS = 48;
-export const MFA_MINUTES = 5;
-export const MAX_CODE_ATTEMPTS = 5;
-export const SESSION_HOURS = 8;
-export const IDLE_MINUTES = 30;
 
 const enc = new TextEncoder();
 const toHex = (buf) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -24,7 +18,10 @@ export function randomHex(bytes = 16) {
 export function randomToken(bytes = 32) {
   const a = new Uint8Array(bytes);
   crypto.getRandomValues(a);
-  return btoa(String.fromCharCode(...a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return btoa(String.fromCharCode(...a))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
 
 // Código numérico sin sesgo de módulo
@@ -62,34 +59,6 @@ export async function verifyPassword(password, auth) {
   return safeEqual(hash, auth.hash);
 }
 
-const COMMON = ['password', 'contraseña', '12345678', 'qwerty', 'residencial', 'admin123', '123456789', 'abc12345'];
-
-// Reglas de contraseña: devuelve la lista de requisitos que no se cumplen.
-export function passwordIssues(pw, { name = '', email = '' } = {}) {
-  const issues = [];
-  if (pw.length < 10) issues.push('Al menos 10 caracteres');
-  if (!/[a-z]/.test(pw) || !/[A-Z]/.test(pw)) issues.push('Mayúsculas y minúsculas');
-  if (!/\d/.test(pw)) issues.push('Al menos un número');
-  if (!/[^A-Za-z0-9]/.test(pw)) issues.push('Al menos un símbolo (#, !, $…)');
-  const low = pw.toLowerCase();
-  const parts = [...name.toLowerCase().split(/\s+/), email.toLowerCase().split('@')[0]].filter((p) => p && p.length >= 4);
-  if (COMMON.some((c) => low.includes(c)) || parts.some((p) => low.includes(p))) issues.push('Sin tu nombre, correo ni palabras comunes');
-  return issues;
-}
-
-export const normEmail = (e = '') => e.trim().toLowerCase();
-export const validEmail = (e = '') => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e.trim());
-// WhatsApp en formato internacional (México por defecto si se escriben 10 dígitos)
-export function normPhone(p = '') {
-  const d = p.replace(/\D/g, '');
-  if (d.length === 10) return '+52' + d;
-  if (d.length === 12 && d.startsWith('52')) return '+' + d;
-  if (d.length >= 11 && d.length <= 15) return '+' + d;
-  return '';
-}
-export const maskEmail = (e = '') => e.replace(/^(.{2}).*(@.*)$/, '$1•••$2');
-export const maskPhone = (p = '') => (p ? p.slice(0, 3) + ' ••• ••• ' + p.slice(-4) : '');
-
 // Invitación de activación: el enlace (token) va por correo y el código por WhatsApp.
 // Se guardan sólo los hashes; para activar se necesitan los dos canales.
 export async function createInvite(userId, purpose = 'activate') {
@@ -101,7 +70,7 @@ export async function createInvite(userId, purpose = 'activate') {
       purpose,
       tokenHash: await sha256(token),
       codeHash: await sha256(`${userId}:${code}`),
-      expiresAt: new Date(Date.now() + INVITE_HOURS * 3600e3).toISOString(),
+      expiresAt: new Date(Date.now() + SECURITY.INVITE_HOURS * 3600e3).toISOString(),
       attempts: 0,
       createdAt: new Date().toISOString(),
     },

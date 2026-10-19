@@ -10,8 +10,15 @@ import { toUserView } from '../../repositories/accounts.js';
 const COMPANY = { name: 'Residencial Cloud' };
 
 export const toResidencia = (t) => ({
-  id: t.id, name: t.name, address: t.address, plan: t.plan, status: t.status, statusReason: t.statusReason,
-  statusAt: t.statusAt, createdAt: t.createdAt, contact: t.contact,
+  id: t.id,
+  name: t.name,
+  address: t.address,
+  plan: t.plan,
+  status: t.status,
+  statusReason: t.statusReason,
+  statusAt: t.statusAt,
+  createdAt: t.createdAt,
+  contact: t.contact,
 });
 
 export function createTenantService({ repos, config, dispatch, events, ecartpay }) {
@@ -67,12 +74,27 @@ export function createTenantService({ repos, config, dispatch, events, ecartpay 
       const data = { settings: tenants.find(acc.tenantId).settings, payments: tenants.listRecords(acc.tenantId, 'payments') };
       const list = [...new Set(periods)];
       const allowed = payableMonths(data, unitId);
-      if (!list.length || list.some((p) => !allowed.includes(p))) throw new HttpError(409, 'Alguno de los meses ya está pagado o en revisión.', 'period_unavailable');
+      if (!list.length || list.some((p) => !allowed.includes(p)))
+        throw new HttpError(409, 'Alguno de los meses ya está pagado o en revisión.', 'period_unavailable');
       const amount = data.settings.monthlyFee * list.length;
       const concept = `Mantenimiento ${list.map(monthLabel).join(', ')}`;
       const checkout = await ecartpay.createCheckout({ amount, concept, email: acc.email, reference: `${acc.tenantId}:${unitId}` });
-      platform.createCheckout({ id: checkout.id, tenantId: acc.tenantId, userId: acc.id, periods: list, amount, checkoutUrl: checkout.checkoutUrl, createdAt: new Date().toISOString() });
-      return { id: checkout.id, checkoutUrl: ecartpay.mode === 'mock' ? null : checkout.checkoutUrl, amount, concept: `${concept} · ${money(amount)}`, mock: ecartpay.mode === 'mock' };
+      platform.createCheckout({
+        id: checkout.id,
+        tenantId: acc.tenantId,
+        userId: acc.id,
+        periods: list,
+        amount,
+        checkoutUrl: checkout.checkoutUrl,
+        createdAt: new Date().toISOString(),
+      });
+      return {
+        id: checkout.id,
+        checkoutUrl: ecartpay.mode === 'mock' ? null : checkout.checkoutUrl,
+        amount,
+        concept: `${concept} · ${money(amount)}`,
+        mock: ecartpay.mode === 'mock',
+      };
     },
 
     /** Consulta a Ecart Pay y, si el cobro está pagado, registra el pago aprobado (una sola vez). */
@@ -89,7 +111,12 @@ export function createTenantService({ repos, config, dispatch, events, ecartpay 
       if (!owner) throw notFound('La cuenta ya no existe.');
       const done = transaction(db, () => {
         if (platform.checkout(checkoutId).status === 'confirmed') return false; // otro proceso ya lo registró
-        execute(owner, 'submitPayment', { periods: c.periods, method: 'ecartpay', ecartpayId: c.id, reference: c.id }, { ecartpay: { id: c.id, amount: c.amount } });
+        execute(
+          owner,
+          'submitPayment',
+          { periods: c.periods, method: 'ecartpay', ecartpayId: c.id, reference: c.id },
+          { ecartpay: { id: c.id, amount: c.amount } },
+        );
         platform.setCheckoutStatus(checkoutId, 'confirmed');
         return true;
       });

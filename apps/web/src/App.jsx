@@ -40,17 +40,73 @@ function Routed() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Home />} />
-        <Route path="pases" element={<Only roles={['resident']}><Passes /></Only>} />
+        <Route
+          path="pases"
+          element={
+            <Only roles={['resident']}>
+              <Passes />
+            </Only>
+          }
+        />
         <Route path="accesos" element={<AccessLog />} />
-        <Route path="pagos" element={<Only roles={['resident', 'admin']}><Payments /></Only>} />
+        <Route
+          path="pagos"
+          element={
+            <Only roles={['resident', 'admin']}>
+              <Payments />
+            </Only>
+          }
+        />
         <Route path="avisos" element={<Notices />} />
-        <Route path="reservas" element={<Only roles={['resident', 'admin']}><Reservations /></Only>} />
-        <Route path="reportes" element={<Only roles={['resident', 'admin']}><Incidents /></Only>} />
+        <Route
+          path="reservas"
+          element={
+            <Only roles={['resident', 'admin']}>
+              <Reservations />
+            </Only>
+          }
+        />
+        <Route
+          path="reportes"
+          element={
+            <Only roles={['resident', 'admin']}>
+              <Incidents />
+            </Only>
+          }
+        />
         <Route path="paquetes" element={<Packages />} />
-        <Route path="votaciones" element={<Only roles={['resident', 'admin']}><Polls /></Only>} />
-        <Route path="finanzas" element={<Only roles={['resident', 'admin']}><Finances /></Only>} />
-        <Route path="usuarios" element={<Only roles={['admin']}><People /></Only>} />
-        <Route path="configuracion" element={<Only roles={['admin']}><SettingsPage /></Only>} />
+        <Route
+          path="votaciones"
+          element={
+            <Only roles={['resident', 'admin']}>
+              <Polls />
+            </Only>
+          }
+        />
+        <Route
+          path="finanzas"
+          element={
+            <Only roles={['resident', 'admin']}>
+              <Finances />
+            </Only>
+          }
+        />
+        <Route
+          path="usuarios"
+          element={
+            <Only roles={['admin']}>
+              <People />
+            </Only>
+          }
+        />
+        <Route
+          path="configuracion"
+          element={
+            <Only roles={['admin']}>
+              <SettingsPage />
+            </Only>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -70,18 +126,34 @@ const Router = embedded ? MemoryRouter : HashRouter;
 
 class ErrorBoundary extends Component {
   state = { error: null };
-  static getDerivedStateFromError(error) { return { error }; }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
   render() {
     if (!this.state.error) return this.props.children;
     return (
       <div className="login">
         <div className="card" style={{ maxWidth: 520 }}>
           <h2>Algo salió mal</h2>
-          <p className="muted" style={{ margin: '8px 0 16px' }}>No se pudo mostrar esta pantalla. Puedes volver a intentarlo o restablecer los datos de prueba.</p>
-          <p className="faint mono" style={{ marginBottom: 16 }}>{String(this.state.error?.message || this.state.error)}</p>
+          <p className="muted" style={{ margin: '8px 0 16px' }}>
+            No se pudo mostrar esta pantalla. Puedes volver a intentarlo o restablecer los datos de prueba.
+          </p>
+          <p className="faint mono" style={{ marginBottom: 16 }}>
+            {String(this.state.error?.message || this.state.error)}
+          </p>
           <div className="row">
-            <button className="btn" onClick={() => this.setState({ error: null })}>Reintentar</button>
-            <button className="btn primary" onClick={() => { resetStorage(); window.location.reload(); }}>Restablecer datos</button>
+            <button className="btn" onClick={() => this.setState({ error: null })}>
+              Reintentar
+            </button>
+            <button
+              className="btn primary"
+              onClick={() => {
+                resetStorage();
+                window.location.reload();
+              }}
+            >
+              Restablecer datos
+            </button>
           </div>
         </div>
       </div>

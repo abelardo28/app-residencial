@@ -2,7 +2,9 @@
 // Para Web Push real, el backend envía el payload con la clave VAPID y este evento lo recibe.
 self.addEventListener('push', (event) => {
   let data = { title: 'Residencial', body: 'Tienes una nueva notificación' };
-  try { data = event.data.json(); } catch {}
+  try {
+    data = event.data.json();
+  } catch {}
   event.waitUntil(self.registration.showNotification(data.title, { body: data.body, icon: '/favicon.svg', data }));
 });
 self.addEventListener('notificationclick', (event) => {

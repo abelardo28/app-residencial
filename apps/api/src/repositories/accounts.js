@@ -42,8 +42,15 @@ export const toUserView = (a, invite) => ({
 });
 
 const COLUMNS = {
-  name: 'name', phone: 'phone', status: 'status', passwordHash: 'password_hash', failed: 'failed_attempts',
-  lockedUntil: 'locked_until', sessionVersion: 'session_version', lastLoginAt: 'last_login_at', passwordChangedAt: 'password_changed_at',
+  name: 'name',
+  phone: 'phone',
+  status: 'status',
+  passwordHash: 'password_hash',
+  failed: 'failed_attempts',
+  lockedUntil: 'locked_until',
+  sessionVersion: 'session_version',
+  lastLoginAt: 'last_login_at',
+  passwordChangedAt: 'password_changed_at',
 };
 
 export function accountsRepository(db) {
@@ -51,12 +58,21 @@ export function accountsRepository(db) {
   const byEmail = db.prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE');
   const byTenant = db.prepare('SELECT * FROM users WHERE tenant_id = ? ORDER BY created_at');
   const staff = db.prepare("SELECT * FROM users WHERE scope = 'platform' ORDER BY created_at");
-  const insert = db.prepare(`INSERT INTO users (id, scope, tenant_id, email, name, phone, role, profile, status, password_hash, session_version, password_changed_at, created_at)
+  const insert =
+    db.prepare(`INSERT INTO users (id, scope, tenant_id, email, name, phone, role, profile, status, password_hash, session_version, password_changed_at, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`);
   const invitesByTenant = db.prepare('SELECT i.* FROM invites i JOIN users u ON u.id = i.user_id WHERE u.tenant_id = ?');
   const inviteByUser = db.prepare('SELECT * FROM invites WHERE user_id = ?');
   const inviteByToken = db.prepare('SELECT * FROM invites WHERE token_hash = ?');
-  const toInvite = (r) => r && { userId: r.user_id, purpose: r.purpose, tokenHash: r.token_hash, codeHash: r.code_hash, attempts: r.attempts, expiresAt: r.expires_at };
+  const toInvite = (r) =>
+    r && {
+      userId: r.user_id,
+      purpose: r.purpose,
+      tokenHash: r.token_hash,
+      codeHash: r.code_hash,
+      attempts: r.attempts,
+      expiresAt: r.expires_at,
+    };
 
   return {
     findById: (id) => toAccount(byId.get(id)),
@@ -65,7 +81,20 @@ export function accountsRepository(db) {
     listStaff: () => staff.all().map(toAccount),
 
     create(a) {
-      insert.run(a.id, a.scope, a.tenantId ?? null, a.email, a.name, a.phone || '', a.role, json(pickProfile(a.profile)), a.status || 'pending', a.passwordHash ?? null, a.passwordChangedAt ?? null, a.createdAt);
+      insert.run(
+        a.id,
+        a.scope,
+        a.tenantId ?? null,
+        a.email,
+        a.name,
+        a.phone || '',
+        a.role,
+        json(pickProfile(a.profile)),
+        a.status || 'pending',
+        a.passwordHash ?? null,
+        a.passwordChangedAt ?? null,
+        a.createdAt,
+      );
       return this.findById(a.id);
     },
     update(id, patch) {
@@ -90,14 +119,21 @@ export function accountsRepository(db) {
     inviteFor: (userId) => toInvite(inviteByUser.get(userId)),
     inviteByTokenHash: (hash) => toInvite(inviteByToken.get(hash)),
     saveInvite: (i) =>
-      db.prepare(`INSERT INTO invites (user_id, purpose, token_hash, code_hash, attempts, expires_at, created_at) VALUES (?, ?, ?, ?, 0, ?, ?)
+      db
+        .prepare(
+          `INSERT INTO invites (user_id, purpose, token_hash, code_hash, attempts, expires_at, created_at) VALUES (?, ?, ?, ?, 0, ?, ?)
         ON CONFLICT(user_id) DO UPDATE SET purpose = excluded.purpose, token_hash = excluded.token_hash, code_hash = excluded.code_hash,
-        attempts = 0, expires_at = excluded.expires_at, created_at = excluded.created_at`).run(i.userId, i.purpose, i.tokenHash, i.codeHash, i.expiresAt, i.createdAt),
+        attempts = 0, expires_at = excluded.expires_at, created_at = excluded.created_at`,
+        )
+        .run(i.userId, i.purpose, i.tokenHash, i.codeHash, i.expiresAt, i.createdAt),
     setInviteAttempts: (userId, attempts) => db.prepare('UPDATE invites SET attempts = ? WHERE user_id = ?').run(attempts, userId),
     deleteInvite: (userId) => db.prepare('DELETE FROM invites WHERE user_id = ?').run(userId),
 
     // ---------- Verificación en dos pasos ----------
-    createChallenge: (c) => db.prepare('INSERT INTO mfa_challenges (id, user_id, code_hash, attempts, expires_at) VALUES (?, ?, ?, 0, ?)').run(c.id, c.userId, c.codeHash, c.expiresAt),
+    createChallenge: (c) =>
+      db
+        .prepare('INSERT INTO mfa_challenges (id, user_id, code_hash, attempts, expires_at) VALUES (?, ?, ?, 0, ?)')
+        .run(c.id, c.userId, c.codeHash, c.expiresAt),
     getChallenge(id) {
       const r = db.prepare('SELECT * FROM mfa_challenges WHERE id = ?').get(id);
       return r && { id: r.id, userId: r.user_id, codeHash: r.code_hash, attempts: r.attempts, expiresAt: r.expires_at };

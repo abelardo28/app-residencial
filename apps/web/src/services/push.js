@@ -22,7 +22,8 @@ export async function requestPush() {
   if (p === 'granted' && vapid && registration?.pushManager) {
     const sub = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapid });
     const api = import.meta.env.VITE_API_URL;
-    if (api) await fetch(`${api}/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub) });
+    if (api)
+      await fetch(`${api}/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub) });
   }
   return p;
 }

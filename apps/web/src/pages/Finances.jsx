@@ -18,8 +18,16 @@ export default function Finances() {
 
   return (
     <>
-      <PageHead title={me.role === 'admin' ? 'Finanzas' : 'Transparencia'} subtitle={`En qué se usan las cuotas · ${monthLabel(m)}`} fab={me.role === 'admin' ? { icon: <Plus size={18} />, label: 'Gasto', onClick: () => setAdding(true) } : null}>
-        {me.role === 'admin' && <Button variant="primary" onClick={() => setAdding(true)}><Plus size={16} /> Registrar gasto</Button>}
+      <PageHead
+        title={me.role === 'admin' ? 'Finanzas' : 'Transparencia'}
+        subtitle={`En qué se usan las cuotas · ${monthLabel(m)}`}
+        fab={me.role === 'admin' ? { icon: <Plus size={18} />, label: 'Gasto', onClick: () => setAdding(true) } : null}
+      >
+        {me.role === 'admin' && (
+          <Button variant="primary" onClick={() => setAdding(true)}>
+            <Plus size={16} /> Registrar gasto
+          </Button>
+        )}
       </PageHead>
       <div className="grid g3" style={{ marginBottom: 16 }}>
         <Stat label="Ingresos del mes" value={money(income)} />
@@ -33,8 +41,13 @@ export default function Finances() {
           <div className="stack">
             {byCat.map(({ c, v }) => (
               <div key={c}>
-                <div className="row between" style={{ fontSize: 13 }}><span>{c}</span><span className="muted">{money(v)}</span></div>
-                <div className="bar-track"><div className="bar-fill" style={{ width: `${(v / max) * 100}%` }} /></div>
+                <div className="row between" style={{ fontSize: 13 }}>
+                  <span>{c}</span>
+                  <span className="muted">{money(v)}</span>
+                </div>
+                <div className="bar-track">
+                  <div className="bar-fill" style={{ width: `${(v / max) * 100}%` }} />
+                </div>
               </div>
             ))}
           </div>
@@ -44,7 +57,12 @@ export default function Finances() {
           <div className="list">
             {db.expenses.map((e) => (
               <div key={e.id} className="list-item">
-                <div className="grow"><div className="title">{e.concept}</div><div className="faint">{e.category} · {fmtDate(e.date + 'T12:00')}</div></div>
+                <div className="grow">
+                  <div className="title">{e.concept}</div>
+                  <div className="faint">
+                    {e.category} · {fmtDate(e.date + 'T12:00')}
+                  </div>
+                </div>
                 <b>{money(e.amount)}</b>
               </div>
             ))}
@@ -61,13 +79,39 @@ function AddExpense({ onClose }) {
   const [f, setF] = useState({ concept: '', category: CATS[0], amount: '', date: new Date().toISOString().slice(0, 10) });
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
   return (
-    <Modal title="Registrar gasto" onClose={onClose} footer={<Button variant="primary" onClick={() => { if (!f.concept || !f.amount) return; actions.addExpense({ ...f, amount: Number(f.amount) }); onClose(); }}>Guardar</Button>}>
+    <Modal
+      title="Registrar gasto"
+      onClose={onClose}
+      footer={
+        <Button
+          variant="primary"
+          onClick={() => {
+            if (!f.concept || !f.amount) return;
+            actions.addExpense({ ...f, amount: Number(f.amount) }).then(onClose, () => {});
+          }}
+        >
+          Guardar
+        </Button>
+      }
+    >
       <div className="stack">
-        <Field label="Concepto"><input className="input" value={f.concept} onChange={set('concept')} /></Field>
-        <Field label="Categoría"><select className="select" value={f.category} onChange={set('category')}>{CATS.map((c) => <option key={c}>{c}</option>)}</select></Field>
+        <Field label="Concepto">
+          <input className="input" value={f.concept} onChange={set('concept')} />
+        </Field>
+        <Field label="Categoría">
+          <select className="select" value={f.category} onChange={set('category')}>
+            {CATS.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </Field>
         <div className="grid g2">
-          <Field label="Monto"><input type="number" className="input" value={f.amount} onChange={set('amount')} /></Field>
-          <Field label="Fecha"><input type="date" className="input" value={f.date} onChange={set('date')} /></Field>
+          <Field label="Monto">
+            <input type="number" className="input" value={f.amount} onChange={set('amount')} />
+          </Field>
+          <Field label="Fecha">
+            <input type="date" className="input" value={f.date} onChange={set('date')} />
+          </Field>
         </div>
       </div>
     </Modal>

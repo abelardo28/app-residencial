@@ -30,13 +30,18 @@ export default async function platformRoutes(app, { platformService: s }) {
   app.addHook('preHandler', app.requireStaff);
   const ok = (reply) => reply.status(204).send();
 
-  app.post('/residencias', async (req, reply) => reply.status(201).send(s.createResidencial(req.account, parse(ResidencialBody, req.body))));
+  app.post('/residencias', async (req, reply) =>
+    reply.status(201).send(s.createResidencial(req.account, parse(ResidencialBody, req.body))),
+  );
   app.patch('/residencias/:id/status', async (req, reply) => {
     const { status, reason } = parse(StatusBody, req.body);
     s.setResidencialStatus(req.account, req.params.id, status, reason);
     return ok(reply);
   });
-  app.patch('/residencias/:id/plan', async (req, reply) => (s.changePlan(req.account, req.params.id, parse(PlanBody, req.body).plan), ok(reply)));
+  app.patch(
+    '/residencias/:id/plan',
+    async (req, reply) => (s.changePlan(req.account, req.params.id, parse(PlanBody, req.body).plan), ok(reply)),
+  );
   app.post('/residencias/suspend-overdue', async (req) => s.suspendOverdue(req.account, parse(OverdueBody, req.body).days));
 
   app.post('/invoices/generate', async (req) => s.generateInvoices(req.account, parse(GenerateBody, req.body).period));

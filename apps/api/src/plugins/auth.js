@@ -16,7 +16,11 @@ async function auth(app, { config, authService }) {
 
   app.decorateReply('setSessionCookie', function setSessionCookie(session) {
     return this.setCookie(SESSION_COOKIE, session.token, {
-      path: '/api', httpOnly: true, sameSite: 'strict', secure: config.cookieSecure, expires: new Date(session.expiresAt),
+      path: '/api',
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: config.cookieSecure,
+      expires: new Date(session.expiresAt),
     });
   });
   app.decorateReply('clearSessionCookie', function clearSessionCookie() {

@@ -19,10 +19,15 @@ export default async function accountsRoutes(app, { accountsService }) {
   app.addHook('preHandler', app.authenticate);
   const p = (req) => [req.account, req.params.tenantId, req.params.userId];
 
-  app.post('/', async (req, reply) => reply.status(201).send(accountsService.invite(req.account, req.params.tenantId, parse(InviteBody, req.body))));
+  app.post('/', async (req, reply) =>
+    reply.status(201).send(accountsService.invite(req.account, req.params.tenantId, parse(InviteBody, req.body))),
+  );
   app.post('/:userId/invite', async (req, reply) => (accountsService.resendInvite(...p(req)), reply.status(204).send()));
   app.post('/:userId/reset-password', async (req, reply) => (accountsService.resetPassword(...p(req)), reply.status(204).send()));
-  app.post('/:userId/suspension', async (req, reply) => (accountsService.setSuspended(...p(req), parse(SuspensionBody, req.body).suspended), reply.status(204).send()));
+  app.post(
+    '/:userId/suspension',
+    async (req, reply) => (accountsService.setSuspended(...p(req), parse(SuspensionBody, req.body).suspended), reply.status(204).send()),
+  );
   app.post('/:userId/unlock', async (req, reply) => (accountsService.unlock(...p(req)), reply.status(204).send()));
   app.delete('/:userId', async (req, reply) => (accountsService.remove(...p(req)), reply.status(204).send()));
 }

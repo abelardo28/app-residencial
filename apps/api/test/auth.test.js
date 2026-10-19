@@ -8,7 +8,11 @@ describe('autenticación', () => {
   after(() => t.close());
 
   test('un residente inicia sesión y recibe una cookie HttpOnly', async () => {
-    const res = await t.app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { email: 'ana@correo.mx', password: 'Demo#2026' } });
+    const res = await t.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: 'ana@correo.mx', password: 'Demo#2026' },
+    });
     assert.equal(res.statusCode, 200);
     const cookie = res.cookies.find((c) => c.name === 'sid');
     assert.ok(cookie.httpOnly);
@@ -60,10 +64,11 @@ describe('autenticación', () => {
     const c = t.client();
     await c.login('carlos@correo.mx');
     const sid = c.state.sid;
-    assert.equal((await c.get('/auth/session')).status, 200);
+    assert.equal((await c.get('/auth/session')).body.session.userId, 'res2');
     assert.equal((await c.post('/auth/logout')).status, 204);
     c.state.sid = sid; // aunque alguien conserve la cookie, ya no sirve
-    assert.equal((await c.get('/auth/session')).status, 401);
+    assert.equal((await c.get('/auth/session')).body.session, null);
+    assert.equal((await c.get('/me/snapshot')).status, 401);
   });
 
   test('sin sesión no hay datos', async () => {

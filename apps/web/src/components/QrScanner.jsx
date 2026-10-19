@@ -13,23 +13,38 @@ export default function QrScanner({ onScan }) {
     let started = false;
     let last = '';
     scanner
-      .start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 230, height: 230 } }, (text) => {
-        if (text === last) return;
-        last = text;
-        setTimeout(() => (last = ''), 3000);
-        cb.current(text);
-      }, () => {})
-      .then(() => { started = true; })
+      .start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 230, height: 230 } },
+        (text) => {
+          if (text === last) return;
+          last = text;
+          setTimeout(() => (last = ''), 3000);
+          cb.current(text);
+        },
+        () => {},
+      )
+      .then(() => {
+        started = true;
+      })
       .catch(() => setError('No se pudo abrir la cámara. Revisa los permisos o escribe el código manualmente.'));
     return () => {
-      if (started) scanner.stop().then(() => scanner.clear()).catch(() => {});
+      if (started)
+        scanner
+          .stop()
+          .then(() => scanner.clear())
+          .catch(() => {});
     };
   }, []);
 
   return (
     <div>
       <div id={id.current} className="scanner" />
-      {error && <p className="faint" style={{ marginTop: 8 }}>{error}</p>}
+      {error && (
+        <p className="faint" style={{ marginTop: 8 }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }

@@ -47,9 +47,19 @@ export const OPERATIONS = {
     run(t, { user, sign }, input) {
       if (new Date(input.validTo) <= new Date(input.validFrom)) throw new DomainError('La vigencia debe terminar después de iniciar.');
       const pass = {
-        maxUses: 1, days: [], timeFrom: '00:00', timeTo: '23:59', ...input,
+        maxUses: 1,
+        days: [],
+        timeFrom: '00:00',
+        timeTo: '23:59',
+        ...input,
         expectedPlate: normalizePlate(input.expectedPlate),
-        id: uid('p_'), code: shortCode(), residentId: user.id, unitId: user.unitId, uses: [], status: 'active', createdAt: nowIso(),
+        id: uid('p_'),
+        code: shortCode(),
+        residentId: user.id,
+        unitId: user.unitId,
+        uses: [],
+        status: 'active',
+        createdAt: nowIso(),
       };
       pass.token = buildToken(pass, sign);
       return t.add('passes', pass);
@@ -96,9 +106,20 @@ export const OPERATIONS = {
       const cleanPlate = normalizePlate(plate);
       const plateMatch = pass?.expectedPlate && cleanPlate ? pass.expectedPlate === cleanPlate : null;
       const log = {
-        id: uid('a_'), kind: pass ? 'pass' : 'walkin', passId: pass?.id || null,
-        visitorName: pass?.visitorName || visitorName.trim(), type: pass?.type || type, unitId: pass?.unitId || unitId,
-        plate: cleanPlate, plateMatch, photo, notes, companions, guardId: user.id, at: nowIso(), exitAt: null,
+        id: uid('a_'),
+        kind: pass ? 'pass' : 'walkin',
+        passId: pass?.id || null,
+        visitorName: pass?.visitorName || visitorName.trim(),
+        type: pass?.type || type,
+        unitId: pass?.unitId || unitId,
+        plate: cleanPlate,
+        plateMatch,
+        photo,
+        notes,
+        companions,
+        guardId: user.id,
+        at: nowIso(),
+        exitAt: null,
       };
       t.add('accessLogs', log);
       if (pass) t.patch('passes', pass.id, (p) => ({ uses: [...p.uses, { at: log.at, guardId: user.id, logId: log.id }] }));
@@ -106,13 +127,15 @@ export const OPERATIONS = {
       t.notify(t.unitResidents(log.unitId), {
         title: `Ingresó ${log.visitorName}`,
         body: `${who} · ${fmtTime(log.at)}${cleanPlate ? ` · placa ${cleanPlate}` : ''}${pass ? '' : ' · sin pase previo'}`,
-        kind: 'access', link: '/accesos',
+        kind: 'access',
+        link: '/accesos',
       });
       if (plateMatch === false) {
         t.notify([...t.unitResidents(log.unitId), ...t.admins()], {
           title: 'Placa distinta a la registrada',
           body: `${log.visitorName} llegó con placa ${cleanPlate}; el pase indicaba ${pass.expectedPlate}.`,
-          kind: 'alert', link: '/accesos',
+          kind: 'alert',
+          link: '/accesos',
         });
       }
       return log;
@@ -124,16 +147,39 @@ export const OPERATIONS = {
       const log = t.must('accessLogs', id, 'El registro');
       if (log.exitAt) return;
       t.patch('accessLogs', id, { exitAt: nowIso() });
-      if (log.unitId) t.notify(t.unitResidents(log.unitId), { title: `Salió ${log.visitorName}`, body: `Registrado a las ${fmtTime(new Date())}`, kind: 'access', link: '/accesos' });
+      if (log.unitId)
+        t.notify(t.unitResidents(log.unitId), {
+          title: `Salió ${log.visitorName}`,
+          body: `Registrado a las ${fmtTime(new Date())}`,
+          kind: 'access',
+          link: '/accesos',
+        });
     },
   },
   // Acceso general (basura, pipa, gas...) que se avisa a todos los residentes.
   generalAccess: {
     roles: GUARD,
     run(t, { user }, { provider, plate, photo, notes }) {
-      const log = { id: uid('a_'), kind: 'general', visitorName: provider, type: 'general', unitId: null, plate: normalizePlate(plate), photo, notes, guardId: user.id, at: nowIso(), exitAt: null };
+      const log = {
+        id: uid('a_'),
+        kind: 'general',
+        visitorName: provider,
+        type: 'general',
+        unitId: null,
+        plate: normalizePlate(plate),
+        photo,
+        notes,
+        guardId: user.id,
+        at: nowIso(),
+        exitAt: null,
+      };
       t.add('accessLogs', log);
-      t.notify(t.residents(), { title: `${provider} en el residencial`, body: `Ingresó a las ${fmtTime(log.at)}${notes ? ` · ${notes}` : ''}`, kind: 'general', link: '/accesos' });
+      t.notify(t.residents(), {
+        title: `${provider} en el residencial`,
+        body: `Ingresó a las ${fmtTime(log.at)}${notes ? ` · ${notes}` : ''}`,
+        kind: 'general',
+        link: '/accesos',
+      });
       return log;
     },
   },
@@ -144,16 +190,29 @@ export const OPERATIONS = {
     run(t, { user, trusted }, { periods, method, receipt, reference, ecartpayId, notes }) {
       const allowed = payableMonths(t.next, user.unitId);
       const list = [...new Set(periods)];
-      if (!list.length || list.some((p) => !allowed.includes(p))) throw new DomainError('Alguno de los meses ya está pagado o en revisión.', 409, 'period_unavailable');
+      if (!list.length || list.some((p) => !allowed.includes(p)))
+        throw new DomainError('Alguno de los meses ya está pagado o en revisión.', 409, 'period_unavailable');
       // Un pago con Ecart Pay sólo se aprueba si el servidor confirmó el cobro con el proveedor.
       const verified = method === 'ecartpay';
-      if (verified && trusted?.ecartpay?.id !== ecartpayId) throw new DomainError('No pudimos confirmar el pago con Ecart Pay.', 402, 'payment_unverified');
+      if (verified && trusted?.ecartpay?.id !== ecartpayId)
+        throw new DomainError('No pudimos confirmar el pago con Ecart Pay.', 402, 'payment_unverified');
       if (method === 'transfer' && !receipt) throw new DomainError('Adjunta el comprobante de la transferencia.');
       const fee = t.next.settings.monthlyFee;
       const now = nowIso();
       const created = list.map((period) => ({
-        id: uid('pay_'), residentId: user.id, unitId: user.unitId, concept: 'Cuota de mantenimiento', period, amount: fee, method,
-        status: verified ? 'approved' : 'pending', reference: reference || '', ecartpayId: ecartpayId || null, receipt: receipt || null, notes: notes || '', createdAt: now,
+        id: uid('pay_'),
+        residentId: user.id,
+        unitId: user.unitId,
+        concept: 'Cuota de mantenimiento',
+        period,
+        amount: fee,
+        method,
+        status: verified ? 'approved' : 'pending',
+        reference: reference || '',
+        ecartpayId: ecartpayId || null,
+        receipt: receipt || null,
+        notes: notes || '',
+        createdAt: now,
         ...(verified ? { reviewedBy: 'ecartpay', reviewedAt: now } : {}),
       }));
       const total = fee * list.length;
@@ -161,11 +220,26 @@ export const OPERATIONS = {
       created.forEach((p) => t.add('payments', p));
       const unit = t.unitLabel(user.unitId);
       if (verified) {
-        t.notify(t.admins(), { title: 'Pago recibido con Ecart Pay', body: `${user.name} · ${unit} pagó ${money(total)} (${names}).`, kind: 'payment', link: '/pagos' });
-        t.notify([user.id], { title: 'Pago aprobado', body: `Ecart Pay confirmó tu pago de ${money(total)} (${names}).`, kind: 'payment', link: '/pagos' });
+        t.notify(t.admins(), {
+          title: 'Pago recibido con Ecart Pay',
+          body: `${user.name} · ${unit} pagó ${money(total)} (${names}).`,
+          kind: 'payment',
+          link: '/pagos',
+        });
+        t.notify([user.id], {
+          title: 'Pago aprobado',
+          body: `Ecart Pay confirmó tu pago de ${money(total)} (${names}).`,
+          kind: 'payment',
+          link: '/pagos',
+        });
       } else {
         const how = method === 'cash' ? 'reportó un pago en efectivo' : 'subió un comprobante';
-        t.notify(t.admins(), { title: method === 'cash' ? 'Pago en efectivo por confirmar' : 'Comprobante por revisar', body: `${user.name} · ${unit} ${how} de ${money(total)} (${names}).`, kind: 'payment', link: '/pagos' });
+        t.notify(t.admins(), {
+          title: method === 'cash' ? 'Pago en efectivo por confirmar' : 'Comprobante por revisar',
+          body: `${user.name} · ${unit} ${how} de ${money(total)} (${names}).`,
+          kind: 'payment',
+          link: '/pagos',
+        });
       }
       return created;
     },
@@ -178,10 +252,17 @@ export const OPERATIONS = {
       t.patch('payments', id, { status, reviewNote: note || '', reviewedBy: user.id, reviewedAt: nowIso() });
       t.notify([p.residentId], {
         title: status === 'approved' ? 'Pago aprobado' : 'Pago rechazado',
-        body: status === 'approved' ? `Tu pago de ${monthLabel(p.period)} por ${money(p.amount)} fue aprobado.` : `Tu pago de ${monthLabel(p.period)} fue rechazado${note ? `: ${note}` : '.'}`,
-        kind: 'payment', link: '/pagos',
+        body:
+          status === 'approved'
+            ? `Tu pago de ${monthLabel(p.period)} por ${money(p.amount)} fue aprobado.`
+            : `Tu pago de ${monthLabel(p.period)} fue rechazado${note ? `: ${note}` : '.'}`,
+        kind: 'payment',
+        link: '/pagos',
       });
-      t.audit({ action: status === 'approved' ? 'Pago aprobado' : 'Pago rechazado', target: `${t.userName(p.residentId)} · ${monthLabel(p.period)}` });
+      t.audit({
+        action: status === 'approved' ? 'Pago aprobado' : 'Pago rechazado',
+        target: `${t.userName(p.residentId)} · ${monthLabel(p.period)}`,
+      });
     },
   },
   // El administrador registra un cobro en efectivo recibido en oficina.
@@ -191,10 +272,31 @@ export const OPERATIONS = {
       const r = t.must('users', residentId, 'El residente');
       if (r.role !== 'resident') throw new DomainError('Sólo se registran pagos de residentes.');
       const allowed = payableMonths(t.next, r.unitId);
-      if (periods.some((p) => !allowed.includes(p))) throw new DomainError('Alguno de los meses ya está pagado o en revisión.', 409, 'period_unavailable');
+      if (periods.some((p) => !allowed.includes(p)))
+        throw new DomainError('Alguno de los meses ya está pagado o en revisión.', 409, 'period_unavailable');
       const now = nowIso();
-      periods.forEach((period) => t.add('payments', { id: uid('pay_'), residentId, unitId: r.unitId, concept: 'Cuota de mantenimiento', period, amount: t.next.settings.monthlyFee, method: 'cash', status: 'approved', reference: reference || 'Recibo de caja', createdAt: now, reviewedBy: user.id, reviewedAt: now }));
-      t.notify([residentId], { title: 'Pago en efectivo registrado', body: `Administración registró tu pago de ${periods.map(monthLabel).join(', ')}.`, kind: 'payment', link: '/pagos' });
+      periods.forEach((period) =>
+        t.add('payments', {
+          id: uid('pay_'),
+          residentId,
+          unitId: r.unitId,
+          concept: 'Cuota de mantenimiento',
+          period,
+          amount: t.next.settings.monthlyFee,
+          method: 'cash',
+          status: 'approved',
+          reference: reference || 'Recibo de caja',
+          createdAt: now,
+          reviewedBy: user.id,
+          reviewedAt: now,
+        }),
+      );
+      t.notify([residentId], {
+        title: 'Pago en efectivo registrado',
+        body: `Administración registró tu pago de ${periods.map(monthLabel).join(', ')}.`,
+        kind: 'payment',
+        link: '/pagos',
+      });
       t.audit({ action: 'Pago en efectivo registrado', target: `${r.name} · ${periods.map(monthLabel).join(', ')}` });
     },
   },
@@ -202,7 +304,12 @@ export const OPERATIONS = {
     roles: ADMIN,
     run(t, _ctx, { residentIds }) {
       const valid = residentIds.filter((id) => t.get('users', id)?.role === 'resident');
-      t.notify(valid, { title: 'Recordatorio de pago', body: 'Tienes cuotas de mantenimiento pendientes. Puedes pagar con Ecart Pay desde la app.', kind: 'payment', link: '/pagos' });
+      t.notify(valid, {
+        title: 'Recordatorio de pago',
+        body: 'Tienes cuotas de mantenimiento pendientes. Puedes pagar con Ecart Pay desde la app.',
+        kind: 'payment',
+        link: '/pagos',
+      });
       return { sent: valid.length };
     },
   },
@@ -211,10 +318,25 @@ export const OPERATIONS = {
   createNotice: {
     roles: ADMIN,
     run(t, { user }, input) {
-      const notice = { audience: 'residents', attachments: [], ...input, id: uid('n_'), authorId: user.id, createdAt: nowIso(), readBy: [], confirmations: {} };
+      const notice = {
+        audience: 'residents',
+        attachments: [],
+        ...input,
+        id: uid('n_'),
+        authorId: user.id,
+        createdAt: nowIso(),
+        readBy: [],
+        confirmations: {},
+      };
       t.add('notices', notice);
-      const targets = notice.audience === 'staff' ? t.guards() : notice.audience === 'all' ? [...t.residents(), ...t.guards()] : t.residents();
-      t.notify(targets, { title: `${notice.category === 'urgente' ? 'Urgente: ' : 'Nuevo aviso: '}${notice.title}`, body: notice.body.slice(0, 120), kind: 'notice', link: '/avisos' });
+      const targets =
+        notice.audience === 'staff' ? t.guards() : notice.audience === 'all' ? [...t.residents(), ...t.guards()] : t.residents();
+      t.notify(targets, {
+        title: `${notice.category === 'urgente' ? 'Urgente: ' : 'Nuevo aviso: '}${notice.title}`,
+        body: notice.body.slice(0, 120),
+        kind: 'notice',
+        link: '/avisos',
+      });
       return notice;
     },
   },
@@ -238,7 +360,10 @@ export const OPERATIONS = {
     run(t, { user }, { id, answer }) {
       const n = t.must('notices', id, 'El aviso');
       if (!noticeAudience(n, user)) throw forbidden();
-      t.patch('notices', id, (x) => ({ confirmations: { ...x.confirmations, [user.id]: answer }, readBy: x.readBy.includes(user.id) ? x.readBy : [...x.readBy, user.id] }));
+      t.patch('notices', id, (x) => ({
+        confirmations: { ...x.confirmations, [user.id]: answer },
+        readBy: x.readBy.includes(user.id) ? x.readBy : [...x.readBy, user.id],
+      }));
     },
   },
 
@@ -251,11 +376,19 @@ export const OPERATIONS = {
       if (input.from >= input.to) throw new DomainError('La hora de fin debe ser posterior al inicio.');
       if (input.from < am.open || input.to > am.close) throw new DomainError(`${am.name} abre de ${am.open} a ${am.close}.`);
       if (input.guests > am.capacity) throw new DomainError(`${am.name} admite hasta ${am.capacity} personas.`);
-      const clash = t.next.reservations.find((r) => r.status !== 'cancelled' && r.amenityId === input.amenityId && r.date === input.date && r.from < input.to && input.from < r.to);
+      const clash = t.next.reservations.find(
+        (r) =>
+          r.status !== 'cancelled' && r.amenityId === input.amenityId && r.date === input.date && r.from < input.to && input.from < r.to,
+      );
       if (clash) throw new DomainError(`Ese horario ya está reservado (${clash.from}–${clash.to}).`, 409, 'slot_taken');
       const res = { ...input, id: uid('r_'), residentId: user.id, unitId: user.unitId, status: 'approved', createdAt: nowIso() };
       t.add('reservations', res);
-      t.notify(t.admins(), { title: 'Nueva reservación', body: `${user.name} reservó ${am.name} el ${input.date} de ${input.from} a ${input.to}.`, kind: 'reservation', link: '/reservas' });
+      t.notify(t.admins(), {
+        title: 'Nueva reservación',
+        body: `${user.name} reservó ${am.name} el ${input.date} de ${input.from} a ${input.to}.`,
+        kind: 'reservation',
+        link: '/reservas',
+      });
       return res;
     },
   },
@@ -272,7 +405,15 @@ export const OPERATIONS = {
   createIncident: {
     roles: RESIDENT,
     run(t, { user }, input) {
-      const inc = { ...input, id: uid('i_'), residentId: user.id, unitId: user.unitId, status: 'abierta', createdAt: nowIso(), comments: [] };
+      const inc = {
+        ...input,
+        id: uid('i_'),
+        residentId: user.id,
+        unitId: user.unitId,
+        status: 'abierta',
+        createdAt: nowIso(),
+        comments: [],
+      };
       t.add('incidents', inc);
       t.notify(t.admins(), { title: 'Nuevo reporte', body: `${user.name}: ${input.title}`, kind: 'incident', link: '/reportes' });
       return inc;
@@ -286,10 +427,18 @@ export const OPERATIONS = {
         if (inc.residentId !== user.id) throw forbidden();
         if (status && status !== inc.status) throw forbidden('Sólo administración cambia el estado del reporte.');
       }
-      t.patch('incidents', id, (x) => ({ status: status || x.status, comments: comment ? [...x.comments, { id: uid('c_'), userId: user.id, text: comment, at: nowIso() }] : x.comments }));
+      t.patch('incidents', id, (x) => ({
+        status: status || x.status,
+        comments: comment ? [...x.comments, { id: uid('c_'), userId: user.id, text: comment, at: nowIso() }] : x.comments,
+      }));
       const labels = { abierta: 'Abierto', en_proceso: 'En proceso', resuelta: 'Resuelto' };
       const target = user.role === 'resident' ? t.admins() : [inc.residentId];
-      t.notify(target, { title: `Reporte: ${inc.title}`, body: status && status !== inc.status ? `Estado: ${labels[status]}${comment ? ` · ${comment}` : ''}` : comment, kind: 'incident', link: '/reportes' });
+      t.notify(target, {
+        title: `Reporte: ${inc.title}`,
+        body: status && status !== inc.status ? `Estado: ${labels[status]}${comment ? ` · ${comment}` : ''}` : comment,
+        kind: 'incident',
+        link: '/reportes',
+      });
     },
   },
 
@@ -299,9 +448,23 @@ export const OPERATIONS = {
     run(t, { user }, { unitId, carrier, description }) {
       if (!t.next.units.some((u) => u.id === unitId)) throw new DomainError('Elige un domicilio válido.');
       const pickupCode = numericCode(4);
-      const pk = { id: uid('k_'), unitId, carrier, description: description || '', receivedBy: user.id, receivedAt: nowIso(), status: 'waiting', pickupCode };
+      const pk = {
+        id: uid('k_'),
+        unitId,
+        carrier,
+        description: description || '',
+        receivedBy: user.id,
+        receivedAt: nowIso(),
+        status: 'waiting',
+        pickupCode,
+      };
       t.add('packages', pk);
-      t.notify(t.unitResidents(unitId), { title: 'Tienes un paquete en caseta', body: `${carrier}${description ? ` · ${description}` : ''}. Código de entrega: ${pickupCode}`, kind: 'package', link: '/paquetes' });
+      t.notify(t.unitResidents(unitId), {
+        title: 'Tienes un paquete en caseta',
+        body: `${carrier}${description ? ` · ${description}` : ''}. Código de entrega: ${pickupCode}`,
+        kind: 'package',
+        link: '/paquetes',
+      });
       return pk;
     },
   },
@@ -312,7 +475,12 @@ export const OPERATIONS = {
       if (pk.status !== 'waiting') throw new DomainError('Este paquete ya fue entregado.', 409, 'already_delivered');
       if (pk.pickupCode !== code) throw new DomainError('El código de entrega no coincide', 422, 'wrong_code');
       t.patch('packages', id, { status: 'delivered', deliveredAt: nowIso(), deliveredBy: user.id });
-      t.notify(t.unitResidents(pk.unitId), { title: 'Paquete entregado', body: `${pk.carrier} entregado a las ${fmtTime(new Date())}`, kind: 'package', link: '/paquetes' });
+      t.notify(t.unitResidents(pk.unitId), {
+        title: 'Paquete entregado',
+        body: `${pk.carrier} entregado a las ${fmtTime(new Date())}`,
+        kind: 'package',
+        link: '/paquetes',
+      });
     },
   },
 
@@ -320,7 +488,14 @@ export const OPERATIONS = {
   createPoll: {
     roles: ADMIN,
     run(t, { user }, input) {
-      const poll = { ...input, options: input.options.map((o) => ({ id: uid('o_'), text: o.text })), id: uid('pl_'), authorId: user.id, createdAt: nowIso(), votes: {} };
+      const poll = {
+        ...input,
+        options: input.options.map((o) => ({ id: uid('o_'), text: o.text })),
+        id: uid('pl_'),
+        authorId: user.id,
+        createdAt: nowIso(),
+        votes: {},
+      };
       t.add('polls', poll);
       t.notify(t.residents(), { title: 'Nueva votación', body: input.question, kind: 'poll', link: '/votaciones' });
       return poll;
@@ -350,7 +525,12 @@ export const OPERATIONS = {
     run(t, { user }, { kind = 'Emergencia' }) {
       const sos = { id: uid('s_'), residentId: user.id, unitId: user.unitId, kind, at: nowIso(), status: 'active' };
       t.add('sos', sos);
-      t.notify([...t.guards(), ...t.admins()], { title: `ALERTA: ${kind}`, body: `${user.name} · ${t.unitLabel(user.unitId)} solicitó ayuda inmediata.`, kind: 'sos', link: '/' });
+      t.notify([...t.guards(), ...t.admins()], {
+        title: `ALERTA: ${kind}`,
+        body: `${user.name} · ${t.unitLabel(user.unitId)} solicitó ayuda inmediata.`,
+        kind: 'sos',
+        link: '/',
+      });
       return sos;
     },
   },
@@ -376,7 +556,10 @@ export const OPERATIONS = {
   updateSettings: {
     roles: ADMIN,
     run(t, _ctx, data) {
-      t.next.settings = { ...t.next.settings, ...pick(data, ['name', 'monthlyFee', 'dueDay', 'lateFee', 'bank', 'amenities', 'generalProviders', 'cover']) };
+      t.next.settings = {
+        ...t.next.settings,
+        ...pick(data, ['name', 'monthlyFee', 'dueDay', 'lateFee', 'bank', 'amenities', 'generalProviders', 'cover']),
+      };
       if (data.cover === '') delete t.next.settings.cover; // '' = volver a la foto de ejemplo
       t.audit({ action: 'Configuración actualizada', target: Object.keys(data).join(', ') });
     },

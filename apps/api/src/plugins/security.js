@@ -31,4 +31,4 @@ async function security(app, { config }) {
 export default fp(security, { name: 'security' });
 
 /** Límite estricto para rutas de autenticación (intentos por IP). */
-export const authRateLimit = (config) => ({ rateLimit: { max: config.isTest ? 1000 : 10, timeWindow: '1 minute' } });
+export const authRateLimit = (config) => ({ rateLimit: { max: config.isTest ? 1000 : config.AUTH_RATE_LIMIT, timeWindow: '1 minute' } });

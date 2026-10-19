@@ -1,7 +1,11 @@
 import { useRef, useState } from 'react';
 import { X, Upload, FileText, Download } from 'lucide-react';
 
-export const Card = ({ className = '', children, ...p }) => <div className={`card ${className}`} {...p}>{children}</div>;
+export const Card = ({ className = '', children, ...p }) => (
+  <div className={`card ${className}`} {...p}>
+    {children}
+  </div>
+);
 
 export function CardHead({ title, subtitle, children }) {
   return (
@@ -26,7 +30,8 @@ export function PageHead({ title, subtitle, children, fab, keep }) {
       {children && <div className="row">{children}</div>}
       {fab && (
         <button className="fab" onClick={fab.onClick} disabled={fab.disabled} style={fab.disabled ? { opacity: 0.5 } : null}>
-          {fab.icon}{fab.label}
+          {fab.icon}
+          {fab.label}
         </button>
       )}
     </div>
@@ -34,7 +39,9 @@ export function PageHead({ title, subtitle, children, fab, keep }) {
 }
 
 export const Button = ({ variant = '', size = '', className = '', children, ...p }) => (
-  <button className={`btn ${variant} ${size} ${className}`} {...p}>{children}</button>
+  <button className={`btn ${variant} ${size} ${className}`} {...p}>
+    {children}
+  </button>
 );
 
 export const Badge = ({ tone = '', children }) => <span className={`badge ${tone}`}>{children}</span>;
@@ -80,7 +87,9 @@ export function Modal({ title, onClose, children, wide, footer }) {
           <div className="sheet-handle" />
           <div className="row between" style={{ marginBottom: 16, flexWrap: 'nowrap' }}>
             <h2>{title}</h2>
-            <button className="btn ghost icon-btn" onClick={onClose} aria-label="Cerrar"><X size={18} /></button>
+            <button className="btn ghost icon-btn" onClick={onClose} aria-label="Cerrar">
+              <X size={18} />
+            </button>
           </div>
         </div>
         {children}
@@ -95,8 +104,13 @@ export function Tabs({ value, onChange, items }) {
     <div className="tabs" role="tablist">
       {items.map((it) => (
         <button key={it.value} role="tab" className={`tab ${value === it.value ? 'on' : ''}`} onClick={() => onChange(it.value)}>
-          {it.icon}{it.label}
-          {it.count ? <span className="badge" style={{ padding: '0 7px' }}>{it.count}</span> : null}
+          {it.icon}
+          {it.label}
+          {it.count ? (
+            <span className="badge" style={{ padding: '0 7px' }}>
+              {it.count}
+            </span>
+          ) : null}
         </button>
       ))}
     </div>
@@ -109,7 +123,9 @@ export function Chips({ value, onChange, options, multi, scroll }) {
   return (
     <div className={`chips ${scroll ? 'scroll' : ''}`}>
       {options.map((o) => (
-        <button type="button" key={o.value} className={`chip ${isOn(o.value) ? 'on' : ''}`} onClick={() => toggle(o.value)}>{o.label}</button>
+        <button type="button" key={o.value} className={`chip ${isOn(o.value) ? 'on' : ''}`} onClick={() => toggle(o.value)}>
+          {o.label}
+        </button>
       ))}
     </div>
   );
@@ -122,11 +138,25 @@ export function FileDrop({ onFiles, accept, multiple, label = 'Arrastra un archi
       className="drop"
       onClick={() => ref.current.click()}
       onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => { e.preventDefault(); onFiles([...e.dataTransfer.files]); }}
+      onDrop={(e) => {
+        e.preventDefault();
+        onFiles([...e.dataTransfer.files]);
+      }}
     >
       <Upload size={20} style={{ marginBottom: 6 }} />
       <div>{label}</div>
-      <input ref={ref} type="file" hidden accept={accept} multiple={multiple} capture={capture} onChange={(e) => { onFiles([...e.target.files]); e.target.value = ''; }} />
+      <input
+        ref={ref}
+        type="file"
+        hidden
+        accept={accept}
+        multiple={multiple}
+        capture={capture}
+        onChange={(e) => {
+          onFiles([...e.target.files]);
+          e.target.value = '';
+        }}
+      />
     </div>
   );
 }
@@ -135,13 +165,25 @@ export function Attachment({ file, onRemove }) {
   const isImg = file.type?.startsWith('image/');
   return (
     <div className="row" style={{ padding: 8, borderRadius: 12, background: 'var(--surface-sunk)' }}>
-      {isImg ? <img src={file.dataUrl} alt="" className="thumb" /> : <div className="avatar"><FileText size={18} /></div>}
+      {isImg ? (
+        <img src={file.dataUrl} alt="" className="thumb" />
+      ) : (
+        <div className="avatar">
+          <FileText size={18} />
+        </div>
+      )}
       <div className="grow" style={{ flex: 1, minWidth: 0 }}>
         <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</div>
         {file.size ? <div className="faint">{(file.size / 1024).toFixed(0)} KB</div> : null}
       </div>
-      <a className="btn ghost sm" href={file.dataUrl} download={file.name} target="_blank" rel="noreferrer"><Download size={15} /></a>
-      {onRemove && <button className="btn ghost sm" onClick={onRemove}><X size={15} /></button>}
+      <a className="btn ghost sm" href={file.dataUrl} download={file.name} target="_blank" rel="noreferrer">
+        <Download size={15} />
+      </a>
+      {onRemove && (
+        <button className="btn ghost sm" onClick={onRemove}>
+          <X size={15} />
+        </button>
+      )}
     </div>
   );
 }
@@ -156,7 +198,10 @@ export const Empty = ({ icon, children }) => (
 export function Stat({ label, value, sub, icon }) {
   return (
     <Card className="stat">
-      <div className="label">{icon}{label}</div>
+      <div className="label">
+        {icon}
+        {label}
+      </div>
       <div className="value">{value}</div>
       {sub && <div className="sub">{sub}</div>}
     </Card>

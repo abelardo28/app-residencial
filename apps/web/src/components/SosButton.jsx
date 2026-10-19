@@ -10,13 +10,28 @@ export default function SosButton() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button className="btn sos-btn sm" onClick={() => setOpen(true)}><Siren size={16} /> SOS</button>
+      <button className="btn sos-btn sm" onClick={() => setOpen(true)}>
+        <Siren size={16} /> SOS
+      </button>
       {open && (
         <Modal title="Alerta de emergencia" onClose={() => setOpen(false)}>
-          <p className="muted" style={{ marginBottom: 14 }}>Se avisará de inmediato a la caseta y a administración con tu domicilio.</p>
+          <p className="muted" style={{ marginBottom: 14 }}>
+            Se avisará de inmediato a la caseta y a administración con tu domicilio.
+          </p>
           <div className="stack">
             {KINDS.map((k) => (
-              <Button key={k} size="lg" className="block" onClick={() => { actions.triggerSos(k); setOpen(false); toast('Alerta enviada', 'Vigilancia fue notificada.', 'bad'); }}>
+              <Button
+                key={k}
+                size="lg"
+                className="block"
+                onClick={() => {
+                  setOpen(false);
+                  actions.triggerSos(k).then(
+                    () => toast('Alerta enviada', 'Vigilancia fue notificada.', 'bad'),
+                    () => {},
+                  );
+                }}
+              >
                 {k}
               </Button>
             ))}

@@ -8,7 +8,7 @@ import { HttpError, badRequest, conflict, forbidden, notFound } from '../../lib/
 const later = (hours) => new Date(Date.now() + hours * 3600e3).toISOString();
 
 export function createAccountsService({ repos, templates, dispatch, events }) {
-  const { db, accounts, sessions, tenants, platform } = repos;
+  const { db, accounts, tenants, platform } = repos;
 
   /** Comprueba que `actor` pueda administrar las cuentas de `tenantId` y devuelve el residencial. */
   function authorize(actor, tenantId) {
@@ -41,13 +41,16 @@ export function createAccountsService({ repos, templates, dispatch, events }) {
     const token = randomToken(32);
     const code = numericCode(6);
     accounts.saveInvite({
-      userId: acc.id, purpose, tokenHash: sha256(token), codeHash: sha256(`${acc.id}:${code}`),
-      expiresAt: later(SECURITY.INVITE_HOURS), createdAt: new Date().toISOString(),
+      userId: acc.id,
+      purpose,
+      tokenHash: sha256(token),
+      codeHash: sha256(`${acc.id}:${code}`),
+      expiresAt: later(SECURITY.INVITE_HOURS),
+      createdAt: new Date().toISOString(),
     });
     if (purpose === 'reset') {
       accounts.update(acc.id, { status: 'reset', passwordHash: null, failed: 0, lockedUntil: null });
-      accounts.bumpSessionVersion(acc.id);
-      sessions.deleteForUser(acc.id);
+      accounts.bumpSessionVersion(acc.id); // las sesiones abiertas dejan de valer
     } else {
       accounts.update(acc.id, { failed: 0, lockedUntil: null });
     }
@@ -64,14 +67,22 @@ export function createAccountsService({ repos, templates, dispatch, events }) {
       if (!validEmail(email)) throw badRequest('El correo no es válido.');
       if (!phone) throw badRequest('El WhatsApp debe tener 10 dígitos (o incluir lada internacional).');
       if (!ROLES.includes(data.role)) throw badRequest('El rol no es válido.');
-      if (data.role === 'resident' && !tenants.listRecords(tenantId, 'units').some((u) => u.id === data.unitId)) throw badRequest('Selecciona una casa válida.');
+      if (data.role === 'resident' && !tenants.listRecords(tenantId, 'units').some((u) => u.id === data.unitId))
+        throw badRequest('Selecciona una casa válida.');
       if (accounts.findByEmail(email)) throw conflict('Ya existe una cuenta con ese correo.');
 
       const acc = transaction(db, () => {
         const created = accounts.create({
-          id: uid('usr_'), scope: 'tenant', tenantId, email, name: data.name.trim(), phone, role: data.role,
+          id: uid('usr_'),
+          scope: 'tenant',
+          tenantId,
+          email,
+          name: data.name.trim(),
+          phone,
+          role: data.role,
           profile: { unitId: data.role === 'resident' ? data.unitId : undefined, vehicles: data.vehicles || [], shift: data.shift },
-          status: 'pending', createdAt: new Date().toISOString(),
+          status: 'pending',
+          createdAt: new Date().toISOString(),
         });
         issueInvite(actor, tenant, created, 'activate', 'Usuario creado e invitación enviada');
         return created;
@@ -82,7 +93,8 @@ export function createAccountsService({ repos, templates, dispatch, events }) {
 
     resendInvite(actor, tenantId, userId) {
       const { tenant, acc } = target(actor, tenantId, userId);
-      if (acc.status === 'active') throw new HttpError(409, 'La cuenta ya está activa. Si olvidó su contraseña, restablécela.', 'already_active');
+      if (acc.status === 'active')
+        throw new HttpError(409, 'La cuenta ya está activa. Si olvidó su contraseña, restablécela.', 'already_active');
       transaction(db, () => issueInvite(actor, tenant, acc, acc.status === 'reset' ? 'reset' : 'activate', 'Invitación reenviada'));
       changed(tenantId);
     },
@@ -97,10 +109,21 @@ export function createAccountsService({ repos, templates, dispatch, events }) {
     setSuspended(actor, tenantId, userId, suspended) {
       const { acc } = target(actor, tenantId, userId);
       transaction(db, () => {
-        accounts.update(acc.id, { status: suspended ? 'suspended' : acc.passwordHash ? 'active' : accounts.inviteFor(acc.id)?.purpose === 'reset' ? 'reset' : 'pending' });
+        accounts.update(acc.id, {
+          status: suspended
+            ? 'suspended'
+            : acc.passwordHash
+              ? 'active'
+              : accounts.inviteFor(acc.id)?.purpose === 'reset'
+                ? 'reset'
+                : 'pending',
+        });
         accounts.bumpSessionVersion(acc.id);
-        sessions.deleteForUser(acc.id);
-        audit(actor, tenantId, { action: suspended ? 'Cuenta suspendida' : 'Cuenta reactivada', target: acc.name, severity: suspended ? 'warn' : 'info' });
+        audit(actor, tenantId, {
+          action: suspended ? 'Cuenta suspendida' : 'Cuenta reactivada',
+          target: acc.name,
+          severity: suspended ? 'warn' : 'info',
+        });
       });
       changed(tenantId);
     },

@@ -5,7 +5,12 @@
 const omit = (obj, keys) => Object.fromEntries(Object.entries(obj).filter(([k]) => !keys.includes(k)));
 
 /** Datos públicos de una persona para otros usuarios del residencial. */
-const publicUser = (u) => ({ id: u.id, name: u.name, role: u.role, ...(u.role === 'resident' ? { unitId: u.unitId } : { shift: u.shift }) });
+const publicUser = (u) => ({
+  id: u.id,
+  name: u.name,
+  role: u.role,
+  ...(u.role === 'resident' ? { unitId: u.unitId } : { shift: u.shift }),
+});
 
 const forResident = (tenant, me) => {
   const mine = (x) => x.unitId === me.unitId;
@@ -21,18 +26,28 @@ const forResident = (tenant, me) => {
     passes: tenant.passes.filter(mine),
     accessLogs: tenant.accessLogs.filter((a) => mine(a) || a.kind === 'general').map((a) => (mine(a) ? a : omit(a, ['photo']))),
     // Los pagos de otras casas sólo alimentan los totales de transparencia
-    payments: tenant.payments.map((p) => (mine(p) ? p : { id: p.id, unitId: null, period: p.period, amount: p.amount, status: p.status, createdAt: p.createdAt })),
+    payments: tenant.payments.map((p) =>
+      mine(p) ? p : { id: p.id, unitId: null, period: p.period, amount: p.amount, status: p.status, createdAt: p.createdAt },
+    ),
     notices: tenant.notices.filter(seesNotice).map((n) => {
       const readBy = n.readBy || [];
       const answer = n.confirmations?.[me.id];
-      return { ...n, readBy: readBy.filter((id) => id === me.id), readCount: readBy.length, confirmations: answer ? { [me.id]: answer } : {} };
+      return {
+        ...n,
+        readBy: readBy.filter((id) => id === me.id),
+        readCount: readBy.length,
+        confirmations: answer ? { [me.id]: answer } : {},
+      };
     }),
     notifications: tenant.notifications.filter((n) => n.userId === me.id),
     reservations: tenant.reservations.map((r) => (mine(r) ? r : omit(r, ['residentId', 'unitId', 'notes']))),
     incidents: tenant.incidents.filter(mine),
     packages: tenant.packages.filter(mine),
     // Votos anónimos: se conservan los conteos y el voto propio
-    polls: tenant.polls.map((p) => ({ ...p, votes: Object.fromEntries(Object.entries(p.votes || {}).map(([uid, o], i) => [uid === me.id ? uid : `anon${i}`, o])) })),
+    polls: tenant.polls.map((p) => ({
+      ...p,
+      votes: Object.fromEntries(Object.entries(p.votes || {}).map(([uid, o], i) => [uid === me.id ? uid : `anon${i}`, o])),
+    })),
     expenses: tenant.expenses,
     sos: tenant.sos.filter((s) => s.residentId === me.id),
   };
@@ -45,7 +60,9 @@ const forGuard = (tenant, me) => ({
   passes: [], // la validación de códigos ocurre en el servidor
   accessLogs: tenant.accessLogs,
   payments: [],
-  notices: tenant.notices.filter((n) => ['staff', 'all'].includes(n.audience)).map((n) => ({ ...n, readBy: (n.readBy || []).filter((id) => id === me.id), confirmations: {} })),
+  notices: tenant.notices
+    .filter((n) => ['staff', 'all'].includes(n.audience))
+    .map((n) => ({ ...n, readBy: (n.readBy || []).filter((id) => id === me.id), confirmations: {} })),
   notifications: tenant.notifications.filter((n) => n.userId === me.id),
   reservations: [],
   incidents: [],

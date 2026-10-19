@@ -6,7 +6,13 @@ import { SESSION_COOKIE } from '../../plugins/auth.js';
 
 const email = z.string().trim().max(200);
 const LoginBody = z.object({ email, password: z.string().min(1).max(200), scope: z.enum(['tenant', 'platform']).default('tenant') });
-const MfaBody = z.object({ challengeId: z.string().min(1).max(64), code: z.string().trim().regex(/^\d{6}$/, 'Código de 6 dígitos') });
+const MfaBody = z.object({
+  challengeId: z.string().min(1).max(64),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, 'Código de 6 dígitos'),
+});
 const ActivationCheckBody = z.object({ email, token: z.string().min(1).max(200), code: z.string().trim().max(10).optional() });
 const ActivationBody = ActivationCheckBody.extend({ code: z.string().trim().max(10), password: z.string().min(1).max(200) });
 
@@ -38,7 +44,18 @@ export default async function authRoutes(app, { config, authService }) {
 
   app.post('/activation/complete', strict, async (req) => authService.completeActivation(parse(ActivationBody, req.body)));
 
-  app.get('/session', { preHandler: app.authenticate }, async (req) => ({ session: sessionView(req.session, req.account) }));
+  // Sesión actual. Responde 200 también sin sesión (`session: null`) para que la APP lo consulte al abrir.
+  app.get('/session', async (req, reply) => {
+    const token = req.cookies[SESSION_COOKIE];
+    if (!token) return { session: null };
+    try {
+      const { session, account } = authService.resolveSession(token);
+      return { session: sessionView(session, account) };
+    } catch (err) {
+      reply.clearSessionCookie();
+      return { session: null, message: err.message };
+    }
+  });
 
   app.post('/logout', async (req, reply) => {
     const token = req.cookies[SESSION_COOKIE];

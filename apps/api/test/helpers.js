@@ -61,7 +61,14 @@ function safeJson(text) {
 }
 
 export const passInput = (over = {}) => ({
-  visitorName: 'Pedro Visitante', type: 'amigo', mode: 'single',
-  validFrom: new Date(Date.now() - 60e3).toISOString(), validTo: new Date(Date.now() + 3600e3).toISOString(),
-  maxUses: 1, days: [], timeFrom: '00:00', timeTo: '23:59', ...over,
+  visitorName: 'Pedro Visitante',
+  type: 'amigo',
+  mode: 'single',
+  validFrom: new Date(Date.now() - 60e3).toISOString(),
+  validTo: new Date(Date.now() + 3600e3).toISOString(),
+  maxUses: 1,
+  days: [],
+  timeFrom: '00:00',
+  timeTo: '23:59',
+  ...over,
 });

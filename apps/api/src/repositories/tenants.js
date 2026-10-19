@@ -2,12 +2,33 @@
 import { json, parseJson } from '../db/database.js';
 import { toUserView } from './accounts.js';
 
-export const COLLECTIONS = ['units', 'passes', 'accessLogs', 'payments', 'notices', 'notifications', 'reservations', 'incidents', 'packages', 'polls', 'expenses', 'sos'];
+export const COLLECTIONS = [
+  'units',
+  'passes',
+  'accessLogs',
+  'payments',
+  'notices',
+  'notifications',
+  'reservations',
+  'incidents',
+  'packages',
+  'polls',
+  'expenses',
+  'sos',
+];
 
 const toTenant = (r) =>
   r && {
-    id: r.id, name: r.name, address: r.address, plan: r.plan_id, status: r.status, statusReason: r.status_reason,
-    statusAt: r.status_at, contact: r.contact, settings: parseJson(r.settings, {}), createdAt: r.created_at,
+    id: r.id,
+    name: r.name,
+    address: r.address,
+    plan: r.plan_id,
+    status: r.status,
+    statusReason: r.status_reason,
+    statusAt: r.status_at,
+    contact: r.contact,
+    settings: parseJson(r.settings, {}),
+    createdAt: r.created_at,
   };
 
 export function tenantsRepository(db) {
@@ -20,9 +41,11 @@ export function tenantsRepository(db) {
     find: (id) => toTenant(db.prepare('SELECT * FROM tenants WHERE id = ?').get(id)),
     list: () => db.prepare('SELECT * FROM tenants ORDER BY created_at').all().map(toTenant),
     create: (t) =>
-      db.prepare('INSERT INTO tenants (id, name, address, plan_id, status, contact, settings, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      db
+        .prepare('INSERT INTO tenants (id, name, address, plan_id, status, contact, settings, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
         .run(t.id, t.name, t.address || '', t.plan, t.status || 'active', t.contact || '', json(t.settings), t.createdAt),
-    setStatus: (id, status, reason, at) => db.prepare('UPDATE tenants SET status = ?, status_reason = ?, status_at = ? WHERE id = ?').run(status, reason, at, id),
+    setStatus: (id, status, reason, at) =>
+      db.prepare('UPDATE tenants SET status = ?, status_reason = ?, status_at = ? WHERE id = ?').run(status, reason, at, id),
     setPlan: (id, plan) => db.prepare('UPDATE tenants SET plan_id = ? WHERE id = ?').run(plan, id),
     saveSettings: (id, settings) => db.prepare('UPDATE tenants SET settings = ? WHERE id = ?').run(json(settings), id),
     countUnits: (id) => db.prepare("SELECT COUNT(*) AS n FROM tenant_records WHERE tenant_id = ? AND collection = 'units'").get(id).n,
@@ -70,7 +93,7 @@ export function tenantsRepository(db) {
           return target[key];
         },
         set(target, key, value) {
-          if (!(key in target)) next[key]; // registra el original antes de reemplazarlo
+          if (!(key in target)) Reflect.get(next, key); // registra el original antes de reemplazarlo
           target[key] = value;
           return true;
         },

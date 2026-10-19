@@ -24,7 +24,9 @@ export default async function tenantRoutes(app, { tenantService }) {
   }
 
   const resident = { preHandler: [app.authenticate, app.requireTenant(['resident'])] };
-  app.post('/payments/ecartpay/checkout', resident, async (req) => tenantService.createCheckout(req.account, parse(CheckoutBody, req.body)));
+  app.post('/payments/ecartpay/checkout', resident, async (req) =>
+    tenantService.createCheckout(req.account, parse(CheckoutBody, req.body)),
+  );
   app.post('/payments/ecartpay/:id/confirm', resident, async (req) => tenantService.confirmCheckout(String(req.params.id), req.account));
 }
 

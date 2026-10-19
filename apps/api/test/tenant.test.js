@@ -129,7 +129,12 @@ describe('aislamiento entre residenciales', () => {
   });
 
   test('no puede administrar cuentas de otro residencial', async () => {
-    const invite = await ricardo.post('/tenants/t1/users', { name: 'Intruso', email: 'intruso@correo.mx', phone: '3312345678', role: 'admin' });
+    const invite = await ricardo.post('/tenants/t1/users', {
+      name: 'Intruso',
+      email: 'intruso@correo.mx',
+      phone: '3312345678',
+      role: 'admin',
+    });
     assert.equal(invite.status, 403);
     assert.equal((await ricardo.post('/tenants/t1/users/res1/reset-password')).status, 403);
   });

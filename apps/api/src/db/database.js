@@ -18,8 +18,15 @@ export function openDatabase(path) {
 /** Aplica en orden las migraciones `NNN_nombre.sql` que aún no se han ejecutado. */
 export function migrate(db) {
   db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)');
-  const done = new Set(db.prepare('SELECT name FROM schema_migrations').all().map((r) => r.name));
-  const pending = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql') && !done.has(f)).sort();
+  const done = new Set(
+    db
+      .prepare('SELECT name FROM schema_migrations')
+      .all()
+      .map((r) => r.name),
+  );
+  const pending = readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith('.sql') && !done.has(f))
+    .sort();
   for (const file of pending) {
     transaction(db, () => {
       db.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));

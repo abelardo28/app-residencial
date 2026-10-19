@@ -28,7 +28,9 @@ export function errorHandler(err, request, reply) {
     return reply.status(400).send({ error: { code: 'invalid_request', message: 'La solicitud no es válida.' } });
   }
   if (err.statusCode === 429) {
-    return reply.status(429).send({ error: { code: 'rate_limited', message: 'Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.' } });
+    return reply
+      .status(429)
+      .send({ error: { code: 'rate_limited', message: 'Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.' } });
   }
   if (err.statusCode === 413) {
     return reply.status(413).send({ error: { code: 'payload_too_large', message: 'El archivo es demasiado grande.' } });

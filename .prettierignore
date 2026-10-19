@@ -1,0 +1,6 @@
+node_modules
+dist
+package-lock.json
+apps/web/public/ocr
+apps/api/data
+*.db

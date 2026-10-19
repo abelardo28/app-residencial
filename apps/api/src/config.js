@@ -19,6 +19,8 @@ const schema = z
     CORS_ORIGINS: z.string().default(''),
     COOKIE_SECURE: bool.optional(),
     TRUST_PROXY: bool.default(false),
+    // Intentos por minuto y por IP en las rutas de inicio de sesión y activación
+    AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(20),
 
     // Firma de los QR de acceso (HMAC-SHA256)
     ACCESS_SECRET: z.string().min(32).default('dev-only-access-secret-change-me-0000000000'),
@@ -42,7 +44,8 @@ const schema = z
   .superRefine((c, ctx) => {
     if (c.NODE_ENV !== 'production') return;
     const required = (key, why) => !c[key] && ctx.addIssue({ code: 'custom', path: [key], message: `Obligatorio en producción: ${why}` });
-    if (c.ACCESS_SECRET.startsWith('dev-only')) ctx.addIssue({ code: 'custom', path: ['ACCESS_SECRET'], message: 'Define una clave propia en producción.' });
+    if (c.ACCESS_SECRET.startsWith('dev-only'))
+      ctx.addIssue({ code: 'custom', path: ['ACCESS_SECRET'], message: 'Define una clave propia en producción.' });
     if (c.SEED_DEMO) ctx.addIssue({ code: 'custom', path: ['SEED_DEMO'], message: 'No cargues datos de demostración en producción.' });
     if (c.MESSAGING_PROVIDER === 'live') {
       required('RESEND_API_KEY', 'envío de correos');
@@ -56,7 +59,8 @@ const schema = z
   });
 
 export function loadConfig(env = process.env) {
-  const parsed = schema.safeParse(env);
+  // Una variable vacía (`CLAVE=`) cuenta como no definida y toma su valor por defecto
+  const parsed = schema.safeParse(Object.fromEntries(Object.entries(env).filter(([, v]) => v !== '')));
   if (!parsed.success) {
     const lines = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
     throw new Error(`Configuración inválida:\n${lines}`);
@@ -67,6 +71,11 @@ export function loadConfig(env = process.env) {
     isProd: c.NODE_ENV === 'production',
     isTest: c.NODE_ENV === 'test',
     cookieSecure: c.COOKIE_SECURE ?? c.NODE_ENV === 'production',
-    corsOrigins: [c.APP_URL, ...c.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)],
+    corsOrigins: [
+      c.APP_URL,
+      ...c.CORS_ORIGINS.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ],
   };
 }

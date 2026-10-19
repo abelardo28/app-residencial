@@ -6,7 +6,10 @@ import { toUserView } from '../../repositories/accounts.js';
 import { toResidencia } from '../tenant/service.js';
 
 const DEFAULT_SETTINGS = {
-  dueDay: 10, lateFee: 0, bank: { name: '', clabe: '', holder: '' }, amenities: [],
+  dueDay: 10,
+  lateFee: 0,
+  bank: { name: '', clabe: '', holder: '' },
+  amenities: [],
   generalProviders: ['Recolección de basura', 'Gas', 'Pipa de agua'],
 };
 const inDays = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
@@ -15,8 +18,16 @@ export function createPlatformService({ repos, templates, dispatch, events, acco
   const { db, accounts, tenants, platform } = repos;
   const audit = (actor, e) => platform.audit({ actor: actor.name, ...e });
   const admins = (tenantId) => accounts.listByTenant(tenantId).filter((a) => a.role === 'admin');
-  const mustTenant = (id) => tenants.find(id) || (() => { throw notFound('El residencial no existe.'); })();
-  const mustInvoice = (id) => platform.invoice(id) || (() => { throw notFound('El cargo no existe.'); })();
+  const mustTenant = (id) =>
+    tenants.find(id) ||
+    (() => {
+      throw notFound('El residencial no existe.');
+    })();
+  const mustInvoice = (id) =>
+    platform.invoice(id) ||
+    (() => {
+      throw notFound('El cargo no existe.');
+    })();
   const changed = (tenantId) => {
     events.publish(tenantId || 'platform', { reason: 'platform' });
     dispatch();
@@ -26,8 +37,16 @@ export function createPlatformService({ repos, templates, dispatch, events, acco
     const t = mustTenant(tenantId);
     transaction(db, () => {
       tenants.setStatus(tenantId, status, reason, new Date().toISOString());
-      platform.enqueue(admins(tenantId).flatMap((admin) => templates.serviceStatus({ admin, org: t.name, active: status === 'active', reason })));
-      audit(actor, { tenantId, action: status === 'active' ? 'Residencial reactivado' : 'Residencial suspendido', target: t.name, severity: status === 'active' ? 'info' : 'danger', detail: reason });
+      platform.enqueue(
+        admins(tenantId).flatMap((admin) => templates.serviceStatus({ admin, org: t.name, active: status === 'active', reason })),
+      );
+      audit(actor, {
+        tenantId,
+        action: status === 'active' ? 'Residencial reactivado' : 'Residencial suspendido',
+        target: t.name,
+        severity: status === 'active' ? 'info' : 'danger',
+        detail: reason,
+      });
     });
     changed(tenantId);
   }
@@ -66,11 +85,31 @@ export function createPlatformService({ repos, templates, dispatch, events, acco
       if (accounts.findByEmail(admin.email)) throw conflict('Ya existe una cuenta con el correo del administrador.');
       const tenantId = uid('t_');
       const now = new Date().toISOString();
-      const units = Array.from({ length: unitCount }, (_, i) => ({ id: `u${i + 1}`, label: `${unitPrefix || 'Casa'} ${i + 1}`, street: '' }));
+      const units = Array.from({ length: unitCount }, (_, i) => ({
+        id: `u${i + 1}`,
+        label: `${unitPrefix || 'Casa'} ${i + 1}`,
+        street: '',
+      }));
       transaction(db, () => {
-        tenants.create({ id: tenantId, name, address, plan, contact: admin.name, settings: { ...DEFAULT_SETTINGS, name, monthlyFee }, createdAt: now });
+        tenants.create({
+          id: tenantId,
+          name,
+          address,
+          plan,
+          contact: admin.name,
+          settings: { ...DEFAULT_SETTINGS, name, monthlyFee },
+          createdAt: now,
+        });
         tenants.insertMany(tenantId, 'units', units);
-        platform.createInvoice({ id: uid('inv_'), tenantId, period: monthKey(), amount: platform.plan(plan).price, status: 'pending', dueDate: inDays(10), createdAt: now });
+        platform.createInvoice({
+          id: uid('inv_'),
+          tenantId,
+          period: monthKey(),
+          amount: platform.plan(plan).price,
+          status: 'pending',
+          dueDate: inDays(10),
+          createdAt: now,
+        });
         audit(actor, { tenantId, action: 'Residencial creado', target: name });
         accountsService.invite(actor, tenantId, { name: admin.name, email: admin.email, phone: admin.phone, role: 'admin' });
       });
@@ -95,7 +134,16 @@ export function createPlatformService({ repos, templates, dispatch, events, acco
       const created = transaction(db, () => {
         const items = tenants.list().filter((t) => t.status === 'active' && !platform.hasInvoice(t.id, period));
         const now = new Date().toISOString();
-        for (const t of items) platform.createInvoice({ id: uid('inv_'), tenantId: t.id, period, amount: platform.plan(t.plan)?.price || 0, status: 'pending', dueDate: `${period}-10`, createdAt: now });
+        for (const t of items)
+          platform.createInvoice({
+            id: uid('inv_'),
+            tenantId: t.id,
+            period,
+            amount: platform.plan(t.plan)?.price || 0,
+            status: 'pending',
+            dueDate: `${period}-10`,
+            createdAt: now,
+          });
         if (items.length) audit(actor, { action: 'Cargos generados', target: `${items.length} residencia(s) · ${monthLabel(period)}` });
         return items.length;
       });
@@ -108,7 +156,11 @@ export function createPlatformService({ repos, templates, dispatch, events, acco
       if (inv.status !== 'pending') throw conflict('Este cargo ya no está pendiente.');
       transaction(db, () => {
         platform.payInvoice(id, { method, reference: reference || '', paidAt: new Date().toISOString() });
-        audit(actor, { tenantId: inv.tenantId, action: 'Pago de suscripción registrado', target: `${tenants.find(inv.tenantId)?.name} · ${monthLabel(inv.period)} · ${money(inv.amount)}` });
+        audit(actor, {
+          tenantId: inv.tenantId,
+          action: 'Pago de suscripción registrado',
+          target: `${tenants.find(inv.tenantId)?.name} · ${monthLabel(inv.period)} · ${money(inv.amount)}`,
+        });
       });
       changed(inv.tenantId);
     },
@@ -118,7 +170,12 @@ export function createPlatformService({ repos, templates, dispatch, events, acco
       if (inv.status !== 'pending') throw conflict('Sólo se cancelan cargos pendientes.');
       transaction(db, () => {
         platform.voidInvoice(id);
-        audit(actor, { tenantId: inv.tenantId, action: 'Cargo cancelado', target: `${monthLabel(inv.period)} · ${money(inv.amount)}`, severity: 'warn' });
+        audit(actor, {
+          tenantId: inv.tenantId,
+          action: 'Cargo cancelado',
+          target: `${monthLabel(inv.period)} · ${money(inv.amount)}`,
+          severity: 'warn',
+        });
       });
       changed(inv.tenantId);
     },
@@ -129,9 +186,21 @@ export function createPlatformService({ repos, templates, dispatch, events, acco
       const t = mustTenant(inv.tenantId);
       transaction(db, () => {
         const list = admins(inv.tenantId);
-        platform.enqueue(list.flatMap((admin) => templates.invoiceReminder({ admin, org: t.name, amount: money(inv.amount), period: monthLabel(inv.period) })));
+        platform.enqueue(
+          list.flatMap((admin) =>
+            templates.invoiceReminder({ admin, org: t.name, amount: money(inv.amount), period: monthLabel(inv.period) }),
+          ),
+        );
         const uow = tenants.unitOfWork(inv.tenantId, accounts);
-        createTx(uow.next).notify(list.map((a) => a.id), { title: 'Suscripción pendiente', body: `La suscripción de ${monthLabel(inv.period)} por ${money(inv.amount)} está pendiente de pago.`, kind: 'payment', link: '/configuracion' });
+        createTx(uow.next).notify(
+          list.map((a) => a.id),
+          {
+            title: 'Suscripción pendiente',
+            body: `La suscripción de ${monthLabel(inv.period)} por ${money(inv.amount)} está pendiente de pago.`,
+            kind: 'payment',
+            link: '/configuracion',
+          },
+        );
         uow.commit();
         audit(actor, { tenantId: inv.tenantId, action: 'Recordatorio de suscripción enviado', target: t.name });
       });

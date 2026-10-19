@@ -11,11 +11,23 @@ export default function Polls() {
 
   return (
     <>
-      <PageHead title="Votaciones" subtitle="Decisiones de la comunidad con resultados en tiempo real." fab={me.role === 'admin' ? { icon: <Plus size={18} />, label: 'Votación', onClick: () => setCreating(true) } : null}>
-        {me.role === 'admin' && <Button variant="primary" onClick={() => setCreating(true)}><Plus size={16} /> Nueva votación</Button>}
+      <PageHead
+        title="Votaciones"
+        subtitle="Decisiones de la comunidad con resultados en tiempo real."
+        fab={me.role === 'admin' ? { icon: <Plus size={18} />, label: 'Votación', onClick: () => setCreating(true) } : null}
+      >
+        {me.role === 'admin' && (
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            <Plus size={16} /> Nueva votación
+          </Button>
+        )}
       </PageHead>
       <div className="g-cards">
-        {db.polls.length === 0 && <Card><Empty icon={<Vote />}>Sin votaciones.</Empty></Card>}
+        {db.polls.length === 0 && (
+          <Card>
+            <Empty icon={<Vote />}>Sin votaciones.</Empty>
+          </Card>
+        )}
         {db.polls.map((p) => {
           const open = new Date(p.closesAt) > new Date();
           const total = Object.keys(p.votes).length;
@@ -32,14 +44,41 @@ export default function Polls() {
                   const n = Object.values(p.votes).filter((v) => v === o.id).length;
                   const pct = total ? Math.round((n / total) * 100) : 0;
                   return (
-                    <button key={o.id} disabled={!open || me.role !== 'resident'} onClick={() => actions.vote(p.id, o.id)} className="card flat" style={{ padding: 12, textAlign: 'left', cursor: open && me.role === 'resident' ? 'pointer' : 'default', borderColor: myVote === o.id ? 'var(--ink-1)' : undefined }}>
-                      <div className="row between"><span>{o.text}{myVote === o.id ? ' · tu voto' : ''}</span>{showResults && <span className="muted">{pct}% · {n}</span>}</div>
-                      {showResults && <div className="bar-track" style={{ marginTop: 8 }}><div className="bar-fill" style={{ width: `${pct}%` }} /></div>}
+                    <button
+                      key={o.id}
+                      disabled={!open || me.role !== 'resident'}
+                      onClick={() => actions.vote(p.id, o.id)}
+                      className="card flat"
+                      style={{
+                        padding: 12,
+                        textAlign: 'left',
+                        cursor: open && me.role === 'resident' ? 'pointer' : 'default',
+                        borderColor: myVote === o.id ? 'var(--ink-1)' : undefined,
+                      }}
+                    >
+                      <div className="row between">
+                        <span>
+                          {o.text}
+                          {myVote === o.id ? ' · tu voto' : ''}
+                        </span>
+                        {showResults && (
+                          <span className="muted">
+                            {pct}% · {n}
+                          </span>
+                        )}
+                      </div>
+                      {showResults && (
+                        <div className="bar-track" style={{ marginTop: 8 }}>
+                          <div className="bar-fill" style={{ width: `${pct}%` }} />
+                        </div>
+                      )}
                     </button>
                   );
                 })}
               </div>
-              <div className="faint" style={{ marginTop: 10 }}>Participación {total}/{residents} residentes</div>
+              <div className="faint" style={{ marginTop: 10 }}>
+                Participación {total}/{residents} residentes
+              </div>
             </Card>
           );
         })}
@@ -56,17 +95,53 @@ function CreatePoll({ onClose }) {
   const [closesAt, setClosesAt] = useState(toLocalInput(Date.now() + 7 * 864e5));
   const valid = question && options.filter(Boolean).length >= 2;
   return (
-    <Modal title="Nueva votación" onClose={onClose} footer={<Button variant="primary" disabled={!valid} onClick={() => { actions.createPoll({ question, closesAt: new Date(closesAt).toISOString(), options: options.filter(Boolean).map((text, i) => ({ id: 'o' + i, text })) }); onClose(); }}>Publicar</Button>}>
+    <Modal
+      title="Nueva votación"
+      onClose={onClose}
+      footer={
+        <Button
+          variant="primary"
+          disabled={!valid}
+          onClick={() =>
+            actions
+              .createPoll({
+                question,
+                closesAt: new Date(closesAt).toISOString(),
+                options: options.filter(Boolean).map((text) => ({ text })),
+              })
+              .then(onClose, () => {})
+          }
+        >
+          Publicar
+        </Button>
+      }
+    >
       <div className="stack">
-        <Field label="Pregunta"><input className="input" value={question} onChange={(e) => setQuestion(e.target.value)} /></Field>
+        <Field label="Pregunta">
+          <input className="input" value={question} onChange={(e) => setQuestion(e.target.value)} />
+        </Field>
         {options.map((o, i) => (
           <div key={i} className="row">
-            <input className="input" style={{ flex: 1 }} value={o} placeholder={`Opción ${i + 1}`} onChange={(e) => setOptions(options.map((x, j) => (j === i ? e.target.value : x)))} />
-            {options.length > 2 && <Button variant="ghost" onClick={() => setOptions(options.filter((_, j) => j !== i))}><X size={15} /></Button>}
+            <input
+              className="input"
+              style={{ flex: 1 }}
+              value={o}
+              placeholder={`Opción ${i + 1}`}
+              onChange={(e) => setOptions(options.map((x, j) => (j === i ? e.target.value : x)))}
+            />
+            {options.length > 2 && (
+              <Button variant="ghost" onClick={() => setOptions(options.filter((_, j) => j !== i))}>
+                <X size={15} />
+              </Button>
+            )}
           </div>
         ))}
-        <Button variant="ghost" onClick={() => setOptions([...options, ''])}><Plus size={15} /> Agregar opción</Button>
-        <Field label="Cierra"><input type="datetime-local" className="input" value={closesAt} onChange={(e) => setClosesAt(e.target.value)} /></Field>
+        <Button variant="ghost" onClick={() => setOptions([...options, ''])}>
+          <Plus size={15} /> Agregar opción
+        </Button>
+        <Field label="Cierra">
+          <input type="datetime-local" className="input" value={closesAt} onChange={(e) => setClosesAt(e.target.value)} />
+        </Field>
       </div>
     </Modal>
   );

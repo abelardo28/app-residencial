@@ -63,20 +63,23 @@ export async function buildApp(config, options = {}) {
   await app.register(securityPlugin, { config });
   await app.register(authPlugin, { config, authService: ctx.authService });
 
-  await app.register(async (api) => {
-    api.get('/health', async () => {
-      ctx.repos.db.prepare('SELECT 1').get();
-      return { status: 'ok' };
-    });
-    await api.register(authRoutes, { prefix: '/auth', ...ctx });
-    await api.register(meRoutes, { prefix: '/me', ...ctx });
-    await api.register(tenantRoutes, { prefix: '/tenant', ...ctx });
-    await api.register(accountsRoutes, { prefix: '/tenants/:tenantId/users', ...ctx });
-    await api.register(platformRoutes, { prefix: '/platform', ...ctx });
-    await api.register(eventsRoutes, { prefix: '/events', ...ctx });
-    await api.register(ecartpayWebhookRoutes, { prefix: '/webhooks', ...ctx });
-    if (!config.isProd && config.MESSAGING_PROVIDER === 'console') await api.register(devRoutes, { prefix: '/dev', ...ctx });
-  }, { prefix: '/api/v1' });
+  await app.register(
+    async (api) => {
+      api.get('/health', async () => {
+        ctx.repos.db.prepare('SELECT 1').get();
+        return { status: 'ok' };
+      });
+      await api.register(authRoutes, { prefix: '/auth', ...ctx });
+      await api.register(meRoutes, { prefix: '/me', ...ctx });
+      await api.register(tenantRoutes, { prefix: '/tenant', ...ctx });
+      await api.register(accountsRoutes, { prefix: '/tenants/:tenantId/users', ...ctx });
+      await api.register(platformRoutes, { prefix: '/platform', ...ctx });
+      await api.register(eventsRoutes, { prefix: '/events', ...ctx });
+      await api.register(ecartpayWebhookRoutes, { prefix: '/webhooks', ...ctx });
+      if (!config.isProd && config.MESSAGING_PROVIDER === 'console') await api.register(devRoutes, { prefix: '/dev', ...ctx });
+    },
+    { prefix: '/api/v1' },
+  );
 
   // Limpieza periódica de sesiones y retos vencidos
   const purge = setInterval(() => {

@@ -13,18 +13,53 @@ const d = (days) => h(days * 24);
 
 /** @param {{ sign: (payload: string) => string }} options */
 export function seedTenant({ sign }) {
-  const units = Array.from({ length: 12 }, (_, i) => ({ id: `u${i + 1}`, label: `Casa ${i + 1}`, street: i < 6 ? 'Privada Olivo' : 'Privada Encino' }));
+  const units = Array.from({ length: 12 }, (_, i) => ({
+    id: `u${i + 1}`,
+    label: `Casa ${i + 1}`,
+    street: i < 6 ? 'Privada Olivo' : 'Privada Encino',
+  }));
 
   const users = [
     { id: 'adm1', name: 'Laura Méndez', role: 'admin', email: 'admin@residencial.mx', phone: '+525512340001' },
     { id: 'grd1', name: 'Jorge Ramírez', role: 'guard', email: 'caseta@residencial.mx', phone: '+525512340002', shift: 'Matutino' },
     { id: 'grd2', name: 'Miguel Ortega', role: 'guard', email: 'caseta2@residencial.mx', phone: '+525512340003', shift: 'Nocturno' },
-    { id: 'res1', name: 'Ana Torres', role: 'resident', unitId: 'u3', email: 'ana@correo.mx', phone: '+525520000003', vehicles: ['PXR482A'] },
-    { id: 'res2', name: 'Carlos Ruiz', role: 'resident', unitId: 'u5', email: 'carlos@correo.mx', phone: '+525520000005', vehicles: ['NHT2291'] },
-    { id: 'res3', name: 'Sofía Herrera', role: 'resident', unitId: 'u7', email: 'sofia@correo.mx', phone: '+525520000007', vehicles: [] },
-    { id: 'res4', name: 'Roberto Garza', role: 'resident', unitId: 'u9', email: 'roberto@correo.mx', phone: '+525520000009', vehicles: ['MKD771B'] },
     {
-      id: 'res5', name: 'Mariana López', role: 'resident', unitId: 'u11', email: 'mariana@correo.mx', phone: '+525520000011', vehicles: [] },
+      id: 'res1',
+      name: 'Ana Torres',
+      role: 'resident',
+      unitId: 'u3',
+      email: 'ana@correo.mx',
+      phone: '+525520000003',
+      vehicles: ['PXR482A'],
+    },
+    {
+      id: 'res2',
+      name: 'Carlos Ruiz',
+      role: 'resident',
+      unitId: 'u5',
+      email: 'carlos@correo.mx',
+      phone: '+525520000005',
+      vehicles: ['NHT2291'],
+    },
+    { id: 'res3', name: 'Sofía Herrera', role: 'resident', unitId: 'u7', email: 'sofia@correo.mx', phone: '+525520000007', vehicles: [] },
+    {
+      id: 'res4',
+      name: 'Roberto Garza',
+      role: 'resident',
+      unitId: 'u9',
+      email: 'roberto@correo.mx',
+      phone: '+525520000009',
+      vehicles: ['MKD771B'],
+    },
+    {
+      id: 'res5',
+      name: 'Mariana López',
+      role: 'resident',
+      unitId: 'u11',
+      email: 'mariana@correo.mx',
+      phone: '+525520000011',
+      vehicles: [],
+    },
   ];
 
   const mkPass = (p) => {
@@ -33,15 +68,82 @@ export function seedTenant({ sign }) {
     return pass;
   };
   const passes = [
-    mkPass({ id: 'p1', code: 'K7M2QX', residentId: 'res1', unitId: 'u3', visitorName: 'Mamá (Rosa Torres)', type: 'familiar', mode: 'single', validFrom: h(-1), validTo: h(5), expectedPlate: 'JKL3345' }),
-    mkPass({ id: 'p2', code: 'H4T9ZB', residentId: 'res1', unitId: 'u3', visitorName: 'Lupita (limpieza)', type: 'trabajador', mode: 'recurrent', validFrom: d(-10), validTo: d(80), days: [1, 3, 5], timeFrom: '08:00', timeTo: '17:00' }),
-    mkPass({ id: 'p3', code: 'R8D3NW', residentId: 'res2', unitId: 'u5', visitorName: 'Plomería Express', type: 'proveedor', mode: 'single', validFrom: d(-3), validTo: d(-3 + 0.2), uses: [{ at: d(-3 + 0.05), guardId: 'grd1' }] }),
+    mkPass({
+      id: 'p1',
+      code: 'K7M2QX',
+      residentId: 'res1',
+      unitId: 'u3',
+      visitorName: 'Mamá (Rosa Torres)',
+      type: 'familiar',
+      mode: 'single',
+      validFrom: h(-1),
+      validTo: h(5),
+      expectedPlate: 'JKL3345',
+    }),
+    mkPass({
+      id: 'p2',
+      code: 'H4T9ZB',
+      residentId: 'res1',
+      unitId: 'u3',
+      visitorName: 'Lupita (limpieza)',
+      type: 'trabajador',
+      mode: 'recurrent',
+      validFrom: d(-10),
+      validTo: d(80),
+      days: [1, 3, 5],
+      timeFrom: '08:00',
+      timeTo: '17:00',
+    }),
+    mkPass({
+      id: 'p3',
+      code: 'R8D3NW',
+      residentId: 'res2',
+      unitId: 'u5',
+      visitorName: 'Plomería Express',
+      type: 'proveedor',
+      mode: 'single',
+      validFrom: d(-3),
+      validTo: d(-3 + 0.2),
+      uses: [{ at: d(-3 + 0.05), guardId: 'grd1' }],
+    }),
   ];
 
   const accessLogs = [
-    { id: 'a1', kind: 'pass', passId: 'p3', visitorName: 'Plomería Express', type: 'proveedor', unitId: 'u5', plate: 'NBC4410', plateMatch: null, guardId: 'grd1', at: d(-3 + 0.05), exitAt: d(-3 + 0.12) },
-    { id: 'a2', kind: 'general', visitorName: 'Recolección de basura', type: 'basura', unitId: null, plate: 'SM04821', guardId: 'grd1', at: d(-1), exitAt: d(-1 + 0.03) },
-    { id: 'a3', kind: 'walkin', visitorName: 'Repartidor Amazon', type: 'paqueteria', unitId: 'u7', plate: '', guardId: 'grd2', at: h(-5), exitAt: h(-4.9) },
+    {
+      id: 'a1',
+      kind: 'pass',
+      passId: 'p3',
+      visitorName: 'Plomería Express',
+      type: 'proveedor',
+      unitId: 'u5',
+      plate: 'NBC4410',
+      plateMatch: null,
+      guardId: 'grd1',
+      at: d(-3 + 0.05),
+      exitAt: d(-3 + 0.12),
+    },
+    {
+      id: 'a2',
+      kind: 'general',
+      visitorName: 'Recolección de basura',
+      type: 'basura',
+      unitId: null,
+      plate: 'SM04821',
+      guardId: 'grd1',
+      at: d(-1),
+      exitAt: d(-1 + 0.03),
+    },
+    {
+      id: 'a3',
+      kind: 'walkin',
+      visitorName: 'Repartidor Amazon',
+      type: 'paqueteria',
+      unitId: 'u7',
+      plate: '',
+      guardId: 'grd2',
+      at: h(-5),
+      exitAt: h(-4.9),
+    },
   ];
 
   const months = lastMonths(4);
@@ -52,28 +154,115 @@ export function seedTenant({ sign }) {
     months.slice(0, 3).forEach((m, j) => {
       if (rid === 'res3' && j > 0) return; // Sofía con adeudo
       payments.push({
-        id: `pay_${rid}_${m}`, residentId: rid, unitId, concept: 'Cuota de mantenimiento', period: m, amount: fee,
-        method: ['transfer', 'ecartpay', 'cash'][(idx + j) % 3], status: 'approved', reference: `REF-${m.replace('-', '')}-${unitId}`,
-        createdAt: new Date(`${m}-05T12:00:00`).toISOString(), reviewedBy: 'adm1', reviewedAt: new Date(`${m}-06T10:00:00`).toISOString(),
+        id: `pay_${rid}_${m}`,
+        residentId: rid,
+        unitId,
+        concept: 'Cuota de mantenimiento',
+        period: m,
+        amount: fee,
+        method: ['transfer', 'ecartpay', 'cash'][(idx + j) % 3],
+        status: 'approved',
+        reference: `REF-${m.replace('-', '')}-${unitId}`,
+        createdAt: new Date(`${m}-05T12:00:00`).toISOString(),
+        reviewedBy: 'adm1',
+        reviewedAt: new Date(`${m}-06T10:00:00`).toISOString(),
       });
     });
   });
   payments.push({
-    id: 'pay_pend1', residentId: 'res2', unitId: 'u5', concept: 'Cuota de mantenimiento', period: monthKey(), amount: fee, method: 'transfer',
-    status: 'pending', reference: 'SPEI 0938271', createdAt: h(-20),
+    id: 'pay_pend1',
+    residentId: 'res2',
+    unitId: 'u5',
+    concept: 'Cuota de mantenimiento',
+    period: monthKey(),
+    amount: fee,
+    method: 'transfer',
+    status: 'pending',
+    reference: 'SPEI 0938271',
+    createdAt: h(-20),
     receipt: { id: 'f_demo', name: 'comprobante-spei.svg', type: 'image/svg+xml', dataUrl: demoReceipt() },
   });
 
   const notices = [
-    { id: 'n1', title: 'Asamblea ordinaria de condóminos', category: 'reunion', body: 'Se convoca a la asamblea ordinaria para revisar el presupuesto anual y la propuesta de cámaras nuevas en accesos. Tu asistencia es importante para alcanzar quórum.', eventDate: d(6), location: 'Casa club', authorId: 'adm1', createdAt: d(-2), attachments: [], readBy: ['res2'], requireConfirm: true, confirmations: { res2: 'si' } },
-    { id: 'n2', title: 'Mantenimiento de alberca', category: 'mantenimiento', body: 'La alberca permanecerá cerrada del lunes al miércoles por limpieza profunda y cambio de filtros.', authorId: 'adm1', createdAt: d(-5), attachments: [], readBy: ['res1', 'res2', 'res4'] },
-    { id: 'n3', title: 'Reglamento interno actualizado', category: 'documento', body: 'Compartimos el reglamento con los cambios aprobados en la última asamblea (horarios de mudanza y uso de áreas comunes).', authorId: 'adm1', createdAt: d(-12), attachments: [{ id: 'f_reg', name: 'reglamento-2026.txt', type: 'text/plain', size: 320, dataUrl: 'data:text/plain;charset=utf-8,' + encodeURIComponent('REGLAMENTO INTERNO\n\n1. Mudanzas: lunes a sábado de 9:00 a 18:00.\n2. Áreas comunes: reservar con 24 h de anticipación.\n3. Mascotas: siempre con correa en áreas comunes.\n4. Ruido: respetar descanso de 22:00 a 8:00.') }], readBy: ['res1', 'res2', 'res3', 'res4'] },
+    {
+      id: 'n1',
+      title: 'Asamblea ordinaria de condóminos',
+      category: 'reunion',
+      body: 'Se convoca a la asamblea ordinaria para revisar el presupuesto anual y la propuesta de cámaras nuevas en accesos. Tu asistencia es importante para alcanzar quórum.',
+      eventDate: d(6),
+      location: 'Casa club',
+      authorId: 'adm1',
+      createdAt: d(-2),
+      attachments: [],
+      readBy: ['res2'],
+      requireConfirm: true,
+      confirmations: { res2: 'si' },
+    },
+    {
+      id: 'n2',
+      title: 'Mantenimiento de alberca',
+      category: 'mantenimiento',
+      body: 'La alberca permanecerá cerrada del lunes al miércoles por limpieza profunda y cambio de filtros.',
+      authorId: 'adm1',
+      createdAt: d(-5),
+      attachments: [],
+      readBy: ['res1', 'res2', 'res4'],
+    },
+    {
+      id: 'n3',
+      title: 'Reglamento interno actualizado',
+      category: 'documento',
+      body: 'Compartimos el reglamento con los cambios aprobados en la última asamblea (horarios de mudanza y uso de áreas comunes).',
+      authorId: 'adm1',
+      createdAt: d(-12),
+      attachments: [
+        {
+          id: 'f_reg',
+          name: 'reglamento-2026.txt',
+          type: 'text/plain',
+          size: 320,
+          dataUrl:
+            'data:text/plain;charset=utf-8,' +
+            encodeURIComponent(
+              'REGLAMENTO INTERNO\n\n1. Mudanzas: lunes a sábado de 9:00 a 18:00.\n2. Áreas comunes: reservar con 24 h de anticipación.\n3. Mascotas: siempre con correa en áreas comunes.\n4. Ruido: respetar descanso de 22:00 a 8:00.',
+            ),
+        },
+      ],
+      readBy: ['res1', 'res2', 'res3', 'res4'],
+    },
   ];
 
   const notifications = [
-    { id: 'nt1', userId: 'res1', title: 'Pago aprobado', body: `Tu pago de ${monthLabel(months[2])} fue aprobado.`, kind: 'payment', link: '/pagos', read: true, createdAt: d(-20) },
-    { id: 'nt2', userId: 'res1', title: 'Nuevo aviso: Asamblea ordinaria', body: 'Casa club', kind: 'notice', link: '/avisos', read: false, createdAt: d(-2) },
-    { id: 'nt3', userId: 'adm1', title: 'Comprobante por revisar', body: 'Carlos Ruiz · Casa 5 subió un comprobante de $1,500.', kind: 'payment', link: '/pagos', read: false, createdAt: h(-20) },
+    {
+      id: 'nt1',
+      userId: 'res1',
+      title: 'Pago aprobado',
+      body: `Tu pago de ${monthLabel(months[2])} fue aprobado.`,
+      kind: 'payment',
+      link: '/pagos',
+      read: true,
+      createdAt: d(-20),
+    },
+    {
+      id: 'nt2',
+      userId: 'res1',
+      title: 'Nuevo aviso: Asamblea ordinaria',
+      body: 'Casa club',
+      kind: 'notice',
+      link: '/avisos',
+      read: false,
+      createdAt: d(-2),
+    },
+    {
+      id: 'nt3',
+      userId: 'adm1',
+      title: 'Comprobante por revisar',
+      body: 'Carlos Ruiz · Casa 5 subió un comprobante de $1,500.',
+      kind: 'payment',
+      link: '/pagos',
+      read: false,
+      createdAt: h(-20),
+    },
   ];
 
   const settings = {
@@ -92,21 +281,84 @@ export function seedTenant({ sign }) {
   };
 
   const reservations = [
-    { id: 'r1', amenityId: 'am1', residentId: 'res4', unitId: 'u9', date: d(3).slice(0, 10), from: '16:00', to: '21:00', guests: 25, status: 'approved', createdAt: d(-1) },
-    { id: 'r2', amenityId: 'am3', residentId: 'res1', unitId: 'u3', date: d(1).slice(0, 10), from: '08:00', to: '09:00', guests: 4, status: 'approved', createdAt: d(-1) },
+    {
+      id: 'r1',
+      amenityId: 'am1',
+      residentId: 'res4',
+      unitId: 'u9',
+      date: d(3).slice(0, 10),
+      from: '16:00',
+      to: '21:00',
+      guests: 25,
+      status: 'approved',
+      createdAt: d(-1),
+    },
+    {
+      id: 'r2',
+      amenityId: 'am3',
+      residentId: 'res1',
+      unitId: 'u3',
+      date: d(1).slice(0, 10),
+      from: '08:00',
+      to: '09:00',
+      guests: 4,
+      status: 'approved',
+      createdAt: d(-1),
+    },
   ];
 
   const incidents = [
-    { id: 'i1', title: 'Luminaria fundida en Privada Olivo', category: 'Alumbrado', description: 'La lámpara frente a casa 4 no enciende desde hace 3 días.', residentId: 'res1', unitId: 'u3', status: 'en_proceso', createdAt: d(-3), comments: [{ id: 'c1', userId: 'adm1', text: 'Ya se pidió la refacción al proveedor.', at: d(-2) }] },
-    { id: 'i2', title: 'Fuga de agua en jardín común', category: 'Plomería', description: 'Hay un charco permanente junto al asador 2.', residentId: 'res2', unitId: 'u5', status: 'abierta', createdAt: h(-8), comments: [] },
+    {
+      id: 'i1',
+      title: 'Luminaria fundida en Privada Olivo',
+      category: 'Alumbrado',
+      description: 'La lámpara frente a casa 4 no enciende desde hace 3 días.',
+      residentId: 'res1',
+      unitId: 'u3',
+      status: 'en_proceso',
+      createdAt: d(-3),
+      comments: [{ id: 'c1', userId: 'adm1', text: 'Ya se pidió la refacción al proveedor.', at: d(-2) }],
+    },
+    {
+      id: 'i2',
+      title: 'Fuga de agua en jardín común',
+      category: 'Plomería',
+      description: 'Hay un charco permanente junto al asador 2.',
+      residentId: 'res2',
+      unitId: 'u5',
+      status: 'abierta',
+      createdAt: h(-8),
+      comments: [],
+    },
   ];
 
   const packages = [
-    { id: 'k1', unitId: 'u3', carrier: 'Mercado Libre', description: 'Caja mediana', receivedBy: 'grd1', receivedAt: h(-3), status: 'waiting', pickupCode: '4821' },
+    {
+      id: 'k1',
+      unitId: 'u3',
+      carrier: 'Mercado Libre',
+      description: 'Caja mediana',
+      receivedBy: 'grd1',
+      receivedAt: h(-3),
+      status: 'waiting',
+      pickupCode: '4821',
+    },
   ];
 
   const polls = [
-    { id: 'pl1', question: '¿Aprobamos instalar cámaras con lectura de placas en ambos accesos?', options: [{ id: 'o1', text: 'Sí, con cuota extraordinaria' }, { id: 'o2', text: 'Sí, usando el fondo de reserva' }, { id: 'o3', text: 'No por ahora' }], votes: { res2: 'o2', res4: 'o2' }, closesAt: d(5), authorId: 'adm1', createdAt: d(-1) },
+    {
+      id: 'pl1',
+      question: '¿Aprobamos instalar cámaras con lectura de placas en ambos accesos?',
+      options: [
+        { id: 'o1', text: 'Sí, con cuota extraordinaria' },
+        { id: 'o2', text: 'Sí, usando el fondo de reserva' },
+        { id: 'o3', text: 'No por ahora' },
+      ],
+      votes: { res2: 'o2', res4: 'o2' },
+      closesAt: d(5),
+      authorId: 'adm1',
+      createdAt: d(-1),
+    },
   ];
 
   const expenses = [
@@ -116,7 +368,23 @@ export function seedTenant({ sign }) {
     { id: 'e4', concept: 'Químicos alberca', category: 'Mantenimiento', amount: 1850, date: d(-4).slice(0, 10) },
   ];
 
-  return { version: 1, settings, units, users, passes, accessLogs, payments, notices, notifications, reservations, incidents, packages, polls, expenses, sos: [] };
+  return {
+    version: 1,
+    settings,
+    units,
+    users,
+    passes,
+    accessLogs,
+    payments,
+    notices,
+    notifications,
+    reservations,
+    incidents,
+    packages,
+    polls,
+    expenses,
+    sos: [],
+  };
 }
 
 function demoReceipt() {
@@ -129,32 +397,89 @@ export function seedSecondTenant() {
   const units = Array.from({ length: 8 }, (_, i) => ({ id: `u${i + 1}`, label: `Depto ${101 + i}`, street: 'Torre A' }));
   return {
     version: 1,
-    settings: { name: 'Residencial Los Robles', monthlyFee: 1100, dueDay: 5, lateFee: 100, bank: { name: 'Banorte', clabe: '072 180 0099 8877 6655', holder: 'Condominio Los Robles A.C.' }, amenities: [{ id: 'am1', name: 'Salón de usos múltiples', capacity: 40, open: '09:00', close: '22:00', deposit: 800 }], generalProviders: ['Recolección de basura', 'Gas', 'Jardinería'] },
+    settings: {
+      name: 'Residencial Los Robles',
+      monthlyFee: 1100,
+      dueDay: 5,
+      lateFee: 100,
+      bank: { name: 'Banorte', clabe: '072 180 0099 8877 6655', holder: 'Condominio Los Robles A.C.' },
+      amenities: [{ id: 'am1', name: 'Salón de usos múltiples', capacity: 40, open: '09:00', close: '22:00', deposit: 800 }],
+      generalProviders: ['Recolección de basura', 'Gas', 'Jardinería'],
+    },
     units,
     users: [{ id: 'adm_t2', name: 'Ricardo Salas', role: 'admin', email: 'admin@losrobles.mx', phone: '+525533330001' }],
-    passes: [], accessLogs: [], payments: [], notices: [], notifications: [], reservations: [], incidents: [], packages: [], polls: [], expenses: [], sos: [],
+    passes: [],
+    accessLogs: [],
+    payments: [],
+    notices: [],
+    notifications: [],
+    reservations: [],
+    incidents: [],
+    packages: [],
+    polls: [],
+    expenses: [],
+    sos: [],
   };
 }
 
 export const PLANS = [
   { id: 'basic', name: 'Básico', price: 1490, maxUnits: 50, features: ['Accesos con QR', 'Avisos', 'Pagos con comprobante'] },
-  { id: 'pro', name: 'Profesional', price: 2990, maxUnits: 200, features: ['Todo lo de Básico', 'Ecart Pay', 'Lectura de placas', 'Reservas y votaciones'] },
-  { id: 'premium', name: 'Premium', price: 5490, maxUnits: 1000, features: ['Todo lo de Profesional', 'Varias casetas', 'Soporte prioritario', 'Reportes avanzados'] },
+  {
+    id: 'pro',
+    name: 'Profesional',
+    price: 2990,
+    maxUnits: 200,
+    features: ['Todo lo de Básico', 'Ecart Pay', 'Lectura de placas', 'Reservas y votaciones'],
+  },
+  {
+    id: 'premium',
+    name: 'Premium',
+    price: 5490,
+    maxUnits: 1000,
+    features: ['Todo lo de Profesional', 'Varias casetas', 'Soporte prioritario', 'Reportes avanzados'],
+  },
 ];
 
 /** Datos de la empresa: residencias, planes, personal y cargos de los últimos meses. */
 export function seedCompany() {
   const months = lastMonths(3);
   const residencias = [
-    { id: 't1', name: 'Residencial Las Palmas', address: 'Av. Las Palmas 120, Zapopan, Jal.', plan: 'pro', status: 'active', createdAt: d(-200), contact: 'Laura Méndez' },
-    { id: 't2', name: 'Residencial Los Robles', address: 'Calle Roble 45, Guadalajara, Jal.', plan: 'basic', status: 'active', createdAt: d(-60), contact: 'Ricardo Salas' },
+    {
+      id: 't1',
+      name: 'Residencial Las Palmas',
+      address: 'Av. Las Palmas 120, Zapopan, Jal.',
+      plan: 'pro',
+      status: 'active',
+      createdAt: d(-200),
+      contact: 'Laura Méndez',
+    },
+    {
+      id: 't2',
+      name: 'Residencial Los Robles',
+      address: 'Calle Roble 45, Guadalajara, Jal.',
+      plan: 'basic',
+      status: 'active',
+      createdAt: d(-60),
+      contact: 'Ricardo Salas',
+    },
   ];
   const invoices = [];
   residencias.forEach((r) => {
     const price = PLANS.find((p) => p.id === r.plan).price;
     months.forEach((m, i) => {
       const paid = r.id === 't1' || i < months.length - 1;
-      invoices.push({ id: `inv_${r.id}_${m}`, tenantId: r.id, period: m, amount: price, status: paid ? 'paid' : 'pending', dueDate: `${m}-10`, method: paid ? 'transfer' : null, reference: paid ? `SPEI-${m.replace('-', '')}-${r.id}` : '', paidAt: paid ? new Date(`${m}-08T12:00:00`).toISOString() : null, createdAt: new Date(`${m}-01T09:00:00`).toISOString() });
+      invoices.push({
+        id: `inv_${r.id}_${m}`,
+        tenantId: r.id,
+        period: m,
+        amount: price,
+        status: paid ? 'paid' : 'pending',
+        dueDate: `${m}-10`,
+        method: paid ? 'transfer' : null,
+        reference: paid ? `SPEI-${m.replace('-', '')}-${r.id}` : '',
+        paidAt: paid ? new Date(`${m}-08T12:00:00`).toISOString() : null,
+        createdAt: new Date(`${m}-01T09:00:00`).toISOString(),
+      });
     });
   });
   return {

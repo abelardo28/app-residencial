@@ -1,0 +1,32 @@
+# Entorno completo: APP (nginx) en http://localhost:8080 y API detrás de /api.
+# Antes de usarlo en un servidor real define ACCESS_SECRET, APP_URL y las llaves de los proveedores.
+services:
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    environment:
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      ACCESS_SECRET: ${ACCESS_SECRET:?Define ACCESS_SECRET (32 caracteres o más)}
+      TRUST_PROXY: 'true'
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      MESSAGING_PROVIDER: ${MESSAGING_PROVIDER:-live}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      ECARTPAY_MODE: ${ECARTPAY_MODE:-mock}
+      ECARTPAY_PRIVATE_KEY: ${ECARTPAY_PRIVATE_KEY:-}
+      ECARTPAY_PUBLIC_KEY: ${ECARTPAY_PUBLIC_KEY:-}
+      ECARTPAY_WEBHOOK_SECRET: ${ECARTPAY_WEBHOOK_SECRET:-}
+    volumes:
+      - api-data:/data
+    restart: unless-stopped
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    ports:
+      - '8080:80'
+    depends_on: [api]
+    restart: unless-stopped
+
+volumes:
+  api-data:

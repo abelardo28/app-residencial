@@ -1,8 +1,24 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Home, QrCode, ShieldCheck, Wallet, Megaphone, Bell, CalendarDays, Wrench, Package, Vote, PieChart,
-  Users, LogOut, Menu, Siren, DoorOpen, Settings, MoreHorizontal,
+  Home,
+  QrCode,
+  ShieldCheck,
+  Wallet,
+  Megaphone,
+  Bell,
+  CalendarDays,
+  Wrench,
+  Package,
+  Vote,
+  PieChart,
+  Users,
+  LogOut,
+  Menu,
+  Siren,
+  DoorOpen,
+  Settings,
+  MoreHorizontal,
 } from 'lucide-react';
 import { useStore, unitLabel } from '../data/store';
 import NotificationsPanel from './NotificationsPanel';
@@ -31,45 +47,60 @@ export default function Layout() {
 
   const items = {
     resident: [
-      ['Principal', [
-        ['/', 'Inicio', Home],
-        ['/pases', 'Mis pases de acceso', QrCode],
-        ['/accesos', 'Historial de visitas', DoorOpen],
-        ['/pagos', 'Pagos', Wallet],
-        ['/avisos', 'Avisos', Megaphone, unreadNotices],
-      ]],
-      ['Comunidad', [
-        ['/reservas', 'Reservar áreas', CalendarDays],
-        ['/reportes', 'Reportes', Wrench],
-        ['/paquetes', 'Paquetería', Package, waitingPk],
-        ['/votaciones', 'Votaciones', Vote],
-        ['/finanzas', 'Transparencia', PieChart],
-      ]],
+      [
+        'Principal',
+        [
+          ['/', 'Inicio', Home],
+          ['/pases', 'Mis pases de acceso', QrCode],
+          ['/accesos', 'Historial de visitas', DoorOpen],
+          ['/pagos', 'Pagos', Wallet],
+          ['/avisos', 'Avisos', Megaphone, unreadNotices],
+        ],
+      ],
+      [
+        'Comunidad',
+        [
+          ['/reservas', 'Reservar áreas', CalendarDays],
+          ['/reportes', 'Reportes', Wrench],
+          ['/paquetes', 'Paquetería', Package, waitingPk],
+          ['/votaciones', 'Votaciones', Vote],
+          ['/finanzas', 'Transparencia', PieChart],
+        ],
+      ],
     ],
     guard: [
-      ['Caseta', [
-        ['/', 'Control de acceso', ShieldCheck],
-        ['/accesos', 'Bitácora de accesos', DoorOpen],
-        ['/paquetes', 'Paquetería', Package, waitingPk],
-        ['/avisos', 'Avisos', Megaphone, unreadNotices],
-      ]],
+      [
+        'Caseta',
+        [
+          ['/', 'Control de acceso', ShieldCheck],
+          ['/accesos', 'Bitácora de accesos', DoorOpen],
+          ['/paquetes', 'Paquetería', Package, waitingPk],
+          ['/avisos', 'Avisos', Megaphone, unreadNotices],
+        ],
+      ],
     ],
     admin: [
-      ['Gestión', [
-        ['/', 'Panel', Home],
-        ['/pagos', 'Pagos', Wallet, pendingPays],
-        ['/avisos', 'Avisos', Megaphone],
-        ['/accesos', 'Bitácora de accesos', DoorOpen],
-        ['/usuarios', 'Residentes y personal', Users],
-      ]],
-      ['Comunidad', [
-        ['/reservas', 'Reservaciones', CalendarDays],
-        ['/reportes', 'Reportes', Wrench, openInc],
-        ['/paquetes', 'Paquetería', Package],
-        ['/votaciones', 'Votaciones', Vote],
-        ['/finanzas', 'Finanzas', PieChart],
-        ['/configuracion', 'Configuración', Settings],
-      ]],
+      [
+        'Gestión',
+        [
+          ['/', 'Panel', Home],
+          ['/pagos', 'Pagos', Wallet, pendingPays],
+          ['/avisos', 'Avisos', Megaphone],
+          ['/accesos', 'Bitácora de accesos', DoorOpen],
+          ['/usuarios', 'Residentes y personal', Users],
+        ],
+      ],
+      [
+        'Comunidad',
+        [
+          ['/reservas', 'Reservaciones', CalendarDays],
+          ['/reportes', 'Reportes', Wrench, openInc],
+          ['/paquetes', 'Paquetería', Package],
+          ['/votaciones', 'Votaciones', Vote],
+          ['/finanzas', 'Finanzas', PieChart],
+          ['/configuracion', 'Configuración', Settings],
+        ],
+      ],
     ],
   }[me.role];
 
@@ -82,7 +113,14 @@ export default function Layout() {
     admin: ['/', '/pagos', '/avisos', '/accesos'],
   }[me.role];
   const allLinks = items.flatMap(([, links]) => links);
-  const short = { '/': me.role === 'guard' ? 'Caseta' : 'Inicio', '/pases': 'Pases', '/pagos': 'Pagos', '/avisos': 'Avisos', '/accesos': me.role === 'guard' ? 'Bitácora' : 'Accesos', '/paquetes': 'Paquetes' };
+  const short = {
+    '/': me.role === 'guard' ? 'Caseta' : 'Inicio',
+    '/pases': 'Pases',
+    '/pagos': 'Pagos',
+    '/avisos': 'Avisos',
+    '/accesos': me.role === 'guard' ? 'Bitácora' : 'Accesos',
+    '/paquetes': 'Paquetes',
+  };
   const current = allLinks.find(([to]) => (to === '/' ? loc.pathname === '/' : loc.pathname.startsWith(to)));
 
   return (
@@ -90,7 +128,9 @@ export default function Layout() {
       {open && <div className="sidebar-overlay" onClick={() => setOpen(false)} />}
       <aside className={`sidebar ${open ? 'open' : ''}`} onClick={() => setOpen(false)}>
         <div className="brand">
-          <div className="brand-mark"><Home size={18} /></div>
+          <div className="brand-mark">
+            <Home size={18} />
+          </div>
           <div>
             <b>{db.settings.name}</b>
             <small>{ROLE_LABEL[me.role]}</small>
@@ -115,14 +155,30 @@ export default function Layout() {
             <div style={{ fontWeight: 500 }}>{me.name}</div>
             <div className="faint">{me.role === 'resident' ? unitLabel(db, me.unitId) : ROLE_LABEL[me.role]}</div>
           </div>
-          <button className="btn ghost icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={() => { actions.logout(); nav('/'); }}><LogOut size={17} /></button>
+          <button
+            className="btn ghost icon-btn"
+            title="Cerrar sesión"
+            aria-label="Cerrar sesión"
+            onClick={() => {
+              actions.logout();
+              nav('/');
+            }}
+          >
+            <LogOut size={17} />
+          </button>
         </div>
       </aside>
 
       <div className={`main ${cover ? 'has-cover' : ''}`}>
-        {cover && <div className="cover" aria-hidden="true"><img src={cover} alt="" /></div>}
+        {cover && (
+          <div className="cover" aria-hidden="true">
+            <img src={cover} alt="" />
+          </div>
+        )}
         <header className="topbar">
-          <button className="btn ghost icon-btn menu-btn" onClick={() => setOpen(true)} aria-label="Menú"><Menu size={19} /></button>
+          <button className="btn ghost icon-btn menu-btn" onClick={() => setOpen(true)} aria-label="Menú">
+            <Menu size={19} />
+          </button>
           <div className="topbar-title show-sm">{current?.[1] || db.settings.name}</div>
           <div className="faint hide-sm">{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
           <div className="spacer" />
@@ -144,7 +200,11 @@ export default function Layout() {
 
         <div className="cover-title">
           <div className="cover-name">{db.settings.name}</div>
-          <div className="cover-sub">{ROLE_LABEL[me.role]}{me.role === 'resident' ? ` · ${unitLabel(db, me.unitId)}` : ''}{address ? <span className="hide-sm"> · {address}</span> : null}</div>
+          <div className="cover-sub">
+            {ROLE_LABEL[me.role]}
+            {me.role === 'resident' ? ` · ${unitLabel(db, me.unitId)}` : ''}
+            {address ? <span className="hide-sm"> · {address}</span> : null}
+          </div>
         </div>
 
         <main className="content">

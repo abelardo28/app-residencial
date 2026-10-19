@@ -17,4 +17,6 @@ export function ledger(tenant, unitId, today = new Date()) {
 
 /** Meses que la casa puede pagar ahora (vencidos o por pagar). */
 export const payableMonths = (tenant, unitId, today) =>
-  ledger(tenant, unitId, today).filter((r) => r.state === 'overdue' || r.state === 'due').map((r) => r.month);
+  ledger(tenant, unitId, today)
+    .filter((r) => r.state === 'overdue' || r.state === 'due')
+    .map((r) => r.month);

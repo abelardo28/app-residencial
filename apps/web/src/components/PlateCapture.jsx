@@ -23,7 +23,10 @@ export default function PlateCapture({ plate, onPlate, photo, onPhoto }) {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1600 } } });
       streamRef.current = stream;
       setLive(true);
-      requestAnimationFrame(() => { videoRef.current.srcObject = stream; videoRef.current.play(); });
+      requestAnimationFrame(() => {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      });
     } catch {
       fileRef.current.click(); // sin cámara en vivo: usa la cámara nativa / galería
     }
@@ -66,7 +69,9 @@ export default function PlateCapture({ plate, onPlate, photo, onPhoto }) {
       {live ? (
         <div className="stack">
           <video ref={videoRef} playsInline muted className="photo-preview" style={{ maxHeight: 280 }} />
-          <Button variant="primary" onClick={snap}><Camera size={16} /> Tomar foto</Button>
+          <Button variant="primary" onClick={snap}>
+            <Camera size={16} /> Tomar foto
+          </Button>
         </div>
       ) : photo ? (
         <img src={photo} alt="Placa" className="photo-preview" />
@@ -74,17 +79,38 @@ export default function PlateCapture({ plate, onPlate, photo, onPhoto }) {
 
       {!live && (
         <div className="row">
-          <Button onClick={openCamera}><Camera size={16} /> {photo ? 'Repetir foto' : 'Foto de placa'}</Button>
-          <Button variant="ghost" onClick={() => fileRef.current.click()}><ImagePlus size={16} /> Subir imagen</Button>
-          {photo && !busy && <Button variant="ghost" onClick={() => handleImage(photo)}><RefreshCw size={16} /> Releer</Button>}
+          <Button onClick={openCamera}>
+            <Camera size={16} /> {photo ? 'Repetir foto' : 'Foto de placa'}
+          </Button>
+          <Button variant="ghost" onClick={() => fileRef.current.click()}>
+            <ImagePlus size={16} /> Subir imagen
+          </Button>
+          {photo && !busy && (
+            <Button variant="ghost" onClick={() => handleImage(photo)}>
+              <RefreshCw size={16} /> Releer
+            </Button>
+          )}
         </div>
       )}
-      <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => e.target.files[0] && handleImage(e.target.files[0])} />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(e) => e.target.files[0] && handleImage(e.target.files[0])}
+      />
 
       {(busy || stage) && (
         <div className="stack" style={{ gap: 6 }}>
-          <div className="row faint"><ScanText size={14} /> {stage}</div>
-          {busy && <div className="progress"><div style={{ width: `${Math.round(progress * 100)}%` }} /></div>}
+          <div className="row faint">
+            <ScanText size={14} /> {stage}
+          </div>
+          {busy && (
+            <div className="progress">
+              <div style={{ width: `${Math.round(progress * 100)}%` }} />
+            </div>
+          )}
         </div>
       )}
 
@@ -93,7 +119,11 @@ export default function PlateCapture({ plate, onPlate, photo, onPhoto }) {
       </Field>
       {candidates.length > 1 && (
         <div className="chips">
-          {candidates.map((c) => <button type="button" key={c} className={`chip ${c === plate ? 'on' : ''}`} onClick={() => onPlate(c)}>{c}</button>)}
+          {candidates.map((c) => (
+            <button type="button" key={c} className={`chip ${c === plate ? 'on' : ''}`} onClick={() => onPlate(c)}>
+              {c}
+            </button>
+          ))}
         </div>
       )}
     </div>

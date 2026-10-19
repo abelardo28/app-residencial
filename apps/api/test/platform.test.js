@@ -32,14 +32,21 @@ describe('portal de la empresa', () => {
     assert.equal((await staff.patch('/platform/residencias/t1/status', { status: 'suspended', reason: 'Adeudo' })).status, 204);
     assert.equal((await ana.get('/me/snapshot')).status, 401);
     assert.equal((await t.client().login('ana@correo.mx')).status, 403);
-    assert.ok(t.repos.platform.recentMessages(20).some((m) => m.to === 'admin@residencial.mx' && m.subject.startsWith('Servicio suspendido')));
+    assert.ok(
+      t.repos.platform.recentMessages(20).some((m) => m.to === 'admin@residencial.mx' && m.subject.startsWith('Servicio suspendido')),
+    );
     await staff.patch('/platform/residencias/t1/status', { status: 'active' });
     assert.equal((await t.client().login('ana@correo.mx')).status, 200);
   });
 
   test('crear un residencial invita a su administrador', async () => {
     const res = await staff.post('/platform/residencias', {
-      name: 'Residencial Nuevo', address: 'Calle 1', plan: 'basic', unitCount: 5, unitPrefix: 'Casa', monthlyFee: 900,
+      name: 'Residencial Nuevo',
+      address: 'Calle 1',
+      plan: 'basic',
+      unitCount: 5,
+      unitPrefix: 'Casa',
+      monthlyFee: 900,
       admin: { name: 'Nora Admin', email: 'nora@nuevo.mx', phone: '3311112222' },
     });
     assert.equal(res.status, 201);

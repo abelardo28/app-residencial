@@ -20,8 +20,7 @@ export const numericCode = (length = 4) => randomString('0123456789', length);
 
 export const nowIso = () => new Date().toISOString();
 
-export const money = (n) =>
-  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 }).format(n || 0);
+export const money = (n) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 }).format(n || 0);
 
 export const fmtDate = (d, opts = {}) =>
   d ? new Date(d).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', ...opts }) : '';
@@ -61,4 +60,10 @@ export function lastMonths(n, from = new Date()) {
 
 export const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 export const initials = (name = '') =>
-  name.split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase();
+  name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0])
+    .join('')
+    .toUpperCase();

@@ -21,7 +21,10 @@ const run = (db, userId, name, input) => {
 describe('operaciones compartidas', () => {
   test('rechaza un rol sin permiso', () => {
     const db = tenant();
-    assert.throws(() => run(db, 'res1', 'registerPackage', { unitId: 'u3', carrier: 'DHL' }), (e) => e instanceof DomainError && e.status === 403);
+    assert.throws(
+      () => run(db, 'res1', 'registerPackage', { unitId: 'u3', carrier: 'DHL' }),
+      (e) => e instanceof DomainError && e.status === 403,
+    );
   });
 
   test('las operaciones no mutan el estado original', () => {
@@ -42,7 +45,14 @@ describe('operaciones compartidas', () => {
 
   test('un pase revocado no es válido', () => {
     const now = Date.now();
-    const pass = { status: 'revoked', validFrom: new Date(now - 1e3).toISOString(), validTo: new Date(now + 1e6).toISOString(), uses: [], maxUses: 1, days: [] };
+    const pass = {
+      status: 'revoked',
+      validFrom: new Date(now - 1e3).toISOString(),
+      validTo: new Date(now + 1e6).toISOString(),
+      uses: [],
+      maxUses: 1,
+      days: [],
+    };
     assert.equal(evaluatePass(pass).ok, false);
   });
 
@@ -55,7 +65,10 @@ describe('operaciones compartidas', () => {
 
   test('un pago con Ecart Pay necesita la verificación del servidor', () => {
     const db = tenant();
-    assert.throws(() => run(db, 'res1', 'submitPayment', { periods: [monthKey()], method: 'ecartpay', ecartpayId: 'x' }), (e) => e.status === 402);
+    assert.throws(
+      () => run(db, 'res1', 'submitPayment', { periods: [monthKey()], method: 'ecartpay', ecartpayId: 'x' }),
+      (e) => e.status === 402,
+    );
   });
 
   test('las reservaciones no se empalman', () => {
@@ -63,7 +76,10 @@ describe('operaciones compartidas', () => {
     const am = db.settings.amenities[0];
     const input = { amenityId: am.id, date: '2030-01-10', from: am.open, to: am.close, guests: 1 };
     const { next } = run(db, 'res1', 'createReservation', input);
-    assert.throws(() => run(next, 'res2', 'createReservation', input), (e) => e.code === 'slot_taken');
+    assert.throws(
+      () => run(next, 'res2', 'createReservation', input),
+      (e) => e.code === 'slot_taken',
+    );
   });
 });
 
@@ -72,7 +88,10 @@ describe('estado de cuenta', () => {
     const db = tenant();
     const months = lastMonths(4);
     const rows = ledger(db, 'u3');
-    assert.deepEqual(rows.map((r) => r.month), months);
+    assert.deepEqual(
+      rows.map((r) => r.month),
+      months,
+    );
     assert.ok(payableMonths(db, 'u3').every((m) => months.includes(m)));
   });
 });

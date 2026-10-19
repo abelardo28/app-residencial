@@ -20,7 +20,16 @@ export function createAuthService({ repos, templates, dispatch }) {
     const now = new Date().toISOString();
     const expiresAt = later(SECURITY.SESSION_HOURS * 3600e3);
     transaction(repos.db, () => {
-      sessions.create({ tokenHash: sha256(token), userId: acc.id, sessionVersion: acc.sessionVersion, csrfToken, createdAt: now, expiresAt, ip: meta.ip, userAgent: meta.userAgent });
+      sessions.create({
+        tokenHash: sha256(token),
+        userId: acc.id,
+        sessionVersion: acc.sessionVersion,
+        csrfToken,
+        createdAt: now,
+        expiresAt,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+      });
       accounts.update(acc.id, { failed: 0, lockedUntil: null, lastLoginAt: now });
       audit(acc, { action: 'Inicio de sesión', ip: meta.ip });
     });
@@ -42,7 +51,12 @@ export function createAuthService({ repos, templates, dispatch }) {
       const acc = accounts.findByEmail(normEmail(email));
       if (!acc || acc.scope !== scope) {
         await burnPasswordCheck(password); // mismo tiempo de respuesta exista o no la cuenta
-        platform.audit({ actor: maskEmail(normEmail(email)), action: 'Intento de acceso con correo no registrado', severity: 'warn', ip: meta.ip });
+        platform.audit({
+          actor: maskEmail(normEmail(email)),
+          action: 'Intento de acceso con correo no registrado',
+          severity: 'warn',
+          ip: meta.ip,
+        });
         throw unauthorized(GENERIC_LOGIN_ERROR, 'invalid_credentials');
       }
       if (acc.lockedUntil && new Date(acc.lockedUntil) > new Date()) {
@@ -56,7 +70,11 @@ export function createAuthService({ repos, templates, dispatch }) {
         const lock = failed >= SECURITY.MAX_LOGIN_ATTEMPTS;
         transaction(repos.db, () => {
           accounts.update(acc.id, lock ? { failed: 0, lockedUntil: later(minutes(SECURITY.LOCK_MINUTES)) } : { failed });
-          audit(acc, { action: lock ? 'Cuenta bloqueada por intentos fallidos' : 'Contraseña incorrecta', severity: lock ? 'danger' : 'warn', ip: meta.ip });
+          audit(acc, {
+            action: lock ? 'Cuenta bloqueada por intentos fallidos' : 'Contraseña incorrecta',
+            severity: lock ? 'danger' : 'warn',
+            ip: meta.ip,
+          });
           if (lock) platform.enqueue(templates.locked({ user: acc }));
         });
         if (lock) {
@@ -69,7 +87,12 @@ export function createAuthService({ repos, templates, dispatch }) {
       if (acc.status !== 'active') throw unauthorized(GENERIC_LOGIN_ERROR, 'invalid_credentials');
       if (acc.scope === 'tenant') {
         const t = tenants.find(acc.tenantId);
-        if (t?.status !== 'active') throw new HttpError(403, `El acceso de ${t?.name || 'este residencial'} está suspendido. Contacta a la administración.`, 'tenant_suspended');
+        if (t?.status !== 'active')
+          throw new HttpError(
+            403,
+            `El acceso de ${t?.name || 'este residencial'} está suspendido. Contacta a la administración.`,
+            'tenant_suspended',
+          );
       }
 
       // Verificación en dos pasos para administradores y personal de la empresa
@@ -78,7 +101,12 @@ export function createAuthService({ repos, templates, dispatch }) {
         const challengeId = randomToken(18);
         transaction(repos.db, () => {
           accounts.purgeExpiredChallenges(new Date().toISOString());
-          accounts.createChallenge({ id: challengeId, userId: acc.id, codeHash: sha256(`${challengeId}:${code}`), expiresAt: later(minutes(SECURITY.MFA_MINUTES)) });
+          accounts.createChallenge({
+            id: challengeId,
+            userId: acc.id,
+            codeHash: sha256(`${challengeId}:${code}`),
+            expiresAt: later(minutes(SECURITY.MFA_MINUTES)),
+          });
           platform.enqueue(templates.mfa({ user: acc, code }));
         });
         dispatch();
@@ -119,7 +147,13 @@ export function createAuthService({ repos, templates, dispatch }) {
           else accounts.setInviteAttempts(acc.id, attempts);
           audit(acc, { action: burn ? 'Invitación anulada por intentos fallidos' : 'Código de activación incorrecto', severity: 'warn' });
         });
-        throw new HttpError(400, burn ? 'Demasiados intentos. Por seguridad anulamos esta invitación; pide una nueva a tu administrador.' : `Código incorrecto. Te quedan ${SECURITY.MAX_CODE_ATTEMPTS - attempts} intentos.`, burn ? 'invite_burned' : 'invalid_code');
+        throw new HttpError(
+          400,
+          burn
+            ? 'Demasiados intentos. Por seguridad anulamos esta invitación; pide una nueva a tu administrador.'
+            : `Código incorrecto. Te quedan ${SECURITY.MAX_CODE_ATTEMPTS - attempts} intentos.`,
+          burn ? 'invite_burned' : 'invalid_code',
+        );
       }
       return { name: acc.name, purpose: invite.purpose, user: { name: acc.name, email: acc.email } };
     },
@@ -132,7 +166,13 @@ export function createAuthService({ repos, templates, dispatch }) {
       if (issues.length) throw new HttpError(400, 'La contraseña no cumple: ' + issues.join(', ').toLowerCase(), 'weak_password');
       const passwordHash = await hashPassword(password);
       transaction(repos.db, () => {
-        accounts.update(acc.id, { status: 'active', passwordHash, failed: 0, lockedUntil: null, passwordChangedAt: new Date().toISOString() });
+        accounts.update(acc.id, {
+          status: 'active',
+          passwordHash,
+          failed: 0,
+          lockedUntil: null,
+          passwordChangedAt: new Date().toISOString(),
+        });
         accounts.bumpSessionVersion(acc.id);
         accounts.deleteInvite(acc.id);
         sessions.deleteForUser(acc.id);
@@ -160,8 +200,10 @@ export function createAuthService({ repos, templates, dispatch }) {
       if (now > new Date(s.expiresAt).getTime()) end('Tu sesión expiró. Inicia sesión de nuevo.');
       if (now - new Date(s.lastSeenAt).getTime() > minutes(SECURITY.IDLE_MINUTES)) end('Cerramos tu sesión por inactividad.');
       const acc = accounts.findById(s.userId);
-      if (!acc || acc.status !== 'active' || acc.sessionVersion !== s.sessionVersion) end('Tu sesión se cerró porque cambió el estado de tu cuenta.');
-      if (acc.scope === 'tenant' && tenants.find(acc.tenantId)?.status !== 'active') end('El acceso a este residencial está suspendido. Contacta a la administración.');
+      if (!acc || acc.status !== 'active' || acc.sessionVersion !== s.sessionVersion)
+        end('Tu sesión se cerró porque cambió el estado de tu cuenta.');
+      if (acc.scope === 'tenant' && tenants.find(acc.tenantId)?.status !== 'active')
+        end('El acceso a este residencial está suspendido. Contacta a la administración.');
       if (touch && now - new Date(s.lastSeenAt).getTime() > 60e3) sessions.touch(tokenHash, new Date(now).toISOString());
       return { session: { ...s, token }, account: acc };
     },

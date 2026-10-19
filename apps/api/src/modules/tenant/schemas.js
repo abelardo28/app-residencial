@@ -13,9 +13,20 @@ const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora HH:MM');
 const period = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Periodo AAAA-MM');
 const money = z.number().nonnegative().max(10_000_000);
 /** Imagen o archivo como data URL (las fotos se comprimen en la APP antes de subirlas). */
-const dataUrl = (maxMb) => z.string().max(Math.ceil(maxMb * MB * 1.37)).regex(/^data:[\w.+-]+\/[\w.+-]+(;[\w=-]+)*(;base64)?,/, 'Archivo inválido');
+const dataUrl = (maxMb) =>
+  z
+    .string()
+    .max(Math.ceil(maxMb * MB * 1.37))
+    .regex(/^data:[\w.+-]+\/[\w.+-]+(;[\w=-]+)*(;base64)?,/, 'Archivo inválido');
+/** Foto tomada en caseta (data URL ya comprimida). */
 const photo = dataUrl(2).or(z.literal('')).nullish();
-const attachment = z.object({ id, name: requiredText(200), type: text(100), size: z.number().int().nonnegative(), dataUrl: dataUrl(3) });
+const attachment = z.object({
+  id,
+  name: requiredText(200),
+  type: text(100),
+  size: z.number().int().nonnegative().optional(),
+  dataUrl: dataUrl(3),
+});
 
 const byId = z.object({ id });
 const empty = z.object({});
@@ -56,7 +67,7 @@ export const OPERATION_SCHEMAS = {
   submitPayment: z.object({
     periods: z.array(period).min(1).max(24),
     method: z.enum(['transfer', 'cash']), // los pagos con Ecart Pay sólo los registra el servidor
-    receipt: dataUrl(3).nullish(),
+    receipt: attachment.nullish(),
     reference: text(80).optional(),
     notes: text(300).optional(),
   }),
@@ -78,16 +89,41 @@ export const OPERATION_SCHEMAS = {
   markNoticeRead: byId,
   confirmNotice: z.object({ id, answer: z.enum(['si', 'no']) }),
 
-  createReservation: z.object({ amenityId: id, date: day, from: hhmm, to: hhmm, guests: z.number().int().min(1).max(1000), notes: text(300).optional() }),
+  createReservation: z.object({
+    amenityId: id,
+    date: day,
+    from: hhmm,
+    to: hhmm,
+    guests: z.number().int().min(1).max(1000),
+    notes: text(300).optional(),
+  }),
   cancelReservation: byId,
 
-  createIncident: z.object({ title: requiredText(140), category: requiredText(60), description: text(2000).optional(), photo }),
+  createIncident: z.object({
+    title: requiredText(140),
+    category: requiredText(60),
+    description: text(2000).optional(),
+    photo: attachment.nullish(),
+  }),
   updateIncident: z.object({ id, status: z.enum(['abierta', 'en_proceso', 'resuelta']).optional(), comment: text(1000).optional() }),
 
   registerPackage: z.object({ unitId: id, carrier: requiredText(60), description: text(200).optional() }),
-  deliverPackage: z.object({ id, code: z.string().trim().regex(/^\d{4}$/, 'Código de 4 dígitos') }),
+  deliverPackage: z.object({
+    id,
+    code: z
+      .string()
+      .trim()
+      .regex(/^\d{4}$/, 'Código de 4 dígitos'),
+  }),
 
-  createPoll: z.object({ question: requiredText(300), closesAt: isoDate, options: z.array(z.object({ text: requiredText(120) })).min(2).max(10) }),
+  createPoll: z.object({
+    question: requiredText(300),
+    closesAt: isoDate,
+    options: z
+      .array(z.object({ text: requiredText(120) }))
+      .min(2)
+      .max(10),
+  }),
   vote: z.object({ id, optionId: id }),
 
   addExpense: z.object({ concept: requiredText(140), category: requiredText(60), amount: money, date: day }),
@@ -108,7 +144,12 @@ export const OPERATION_SCHEMAS = {
     dueDay: z.number().int().min(1).max(28).optional(),
     lateFee: money.optional(),
     bank: z.object({ name: text(80), clabe: text(40), holder: text(120) }).optional(),
-    amenities: z.array(z.object({ id, name: requiredText(80), capacity: z.number().int().min(1), open: hhmm, close: hhmm, deposit: money.optional() })).max(30).optional(),
+    amenities: z
+      .array(
+        z.object({ id, name: requiredText(80), capacity: z.number().int().min(1), open: hhmm, close: hhmm, deposit: money.optional() }),
+      )
+      .max(30)
+      .optional(),
     generalProviders: z.array(requiredText(60)).max(30).optional(),
     // data URL = foto propia · '' = foto de ejemplo · null = sin portada
     cover: dataUrl(3).or(z.literal('')).nullable().optional(),

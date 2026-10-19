@@ -1,0 +1,50 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "oxc", "import", "promise", "node"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "caughtErrors": "none"
+      }
+    ],
+    "eqeqeq": ["error", "smart"],
+    "no-console": [
+      "warn",
+      {
+        "allow": ["warn", "error"]
+      }
+    ],
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "react/only-export-components": [
+      "warn",
+      {
+        "allowConstantExport": true
+      }
+    ],
+    "import/no-cycle": "error",
+    "react/react-in-jsx-scope": "off",
+    "react/jsx-filename-extension": "off",
+    "react/purity": "off",
+    "react/refs": "off",
+    "oxc/no-async-endpoint-handlers": "off",
+    "promise/always-return": "off",
+    "import/no-unassigned-import": "off",
+    "no-shadow": "off"
+  },
+  "overrides": [
+    {
+      "files": ["apps/api/**", "packages/shared/test/**", "**/scripts/**"],
+      "rules": {
+        "no-console": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["**/dist/**", "**/public/ocr/**", "**/node_modules/**"]
+}
