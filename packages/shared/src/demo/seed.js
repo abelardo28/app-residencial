@@ -1,31 +1,35 @@
-import { buildToken } from '../services/access';
-import { lastMonths, monthKey, monthLabel } from '../lib/utils';
-import { DEMO_AUTH, DEMO_INVITE } from './demoCredentials';
+// Datos de ejemplo: dos residenciales y la empresa. Los usa el modo demo de la APP y la semilla de la API.
+// Las cuentas no traen credenciales: cada consumidor agrega las suyas (la API con Argon2id).
+import { buildToken } from '../access.js';
+import { lastMonths, monthKey, monthLabel } from '../format.js';
+
+export const DEMO_PASSWORD = 'Demo#2026';
+export const DEMO_COMPANY_PASSWORD = 'Empresa#2026';
+// Invitación pendiente de ejemplo (Mariana López) para probar la activación.
+export const DEMO_INVITE = { userId: 'res5', token: 'Q2FzYTExLWRlbW8tYWN0aXZhY2lvbi10b2tlbi0yMDI2', code: '739154' };
 
 const h = (hours) => new Date(Date.now() + hours * 3600_000).toISOString();
 const d = (days) => h(days * 24);
 
-export function seedTenant() {
+/** @param {{ sign: (payload: string) => string }} options */
+export function seedTenant({ sign }) {
   const units = Array.from({ length: 12 }, (_, i) => ({ id: `u${i + 1}`, label: `Casa ${i + 1}`, street: i < 6 ? 'Privada Olivo' : 'Privada Encino' }));
 
-  const active = (id) => ({ status: 'active', ...DEMO_AUTH[id], failed: 0, lockedUntil: null, sessionVersion: 1, passwordChangedAt: d(-30) });
   const users = [
-    { id: 'adm1', name: 'Laura Méndez', role: 'admin', email: 'admin@residencial.mx', phone: '+525512340001', auth: active('adm1') },
-    { id: 'grd1', name: 'Jorge Ramírez', role: 'guard', email: 'caseta@residencial.mx', phone: '+525512340002', shift: 'Matutino', auth: active('grd1') },
-    { id: 'grd2', name: 'Miguel Ortega', role: 'guard', email: 'caseta2@residencial.mx', phone: '+525512340003', shift: 'Nocturno', auth: active('grd2') },
-    { id: 'res1', name: 'Ana Torres', role: 'resident', unitId: 'u3', email: 'ana@correo.mx', phone: '+525520000003', vehicles: ['PXR482A'], auth: active('res1') },
-    { id: 'res2', name: 'Carlos Ruiz', role: 'resident', unitId: 'u5', email: 'carlos@correo.mx', phone: '+525520000005', vehicles: ['NHT2291'], auth: active('res2') },
-    { id: 'res3', name: 'Sofía Herrera', role: 'resident', unitId: 'u7', email: 'sofia@correo.mx', phone: '+525520000007', vehicles: [], auth: active('res3') },
-    { id: 'res4', name: 'Roberto Garza', role: 'resident', unitId: 'u9', email: 'roberto@correo.mx', phone: '+525520000009', vehicles: ['MKD771B'], auth: active('res4') },
+    { id: 'adm1', name: 'Laura Méndez', role: 'admin', email: 'admin@residencial.mx', phone: '+525512340001' },
+    { id: 'grd1', name: 'Jorge Ramírez', role: 'guard', email: 'caseta@residencial.mx', phone: '+525512340002', shift: 'Matutino' },
+    { id: 'grd2', name: 'Miguel Ortega', role: 'guard', email: 'caseta2@residencial.mx', phone: '+525512340003', shift: 'Nocturno' },
+    { id: 'res1', name: 'Ana Torres', role: 'resident', unitId: 'u3', email: 'ana@correo.mx', phone: '+525520000003', vehicles: ['PXR482A'] },
+    { id: 'res2', name: 'Carlos Ruiz', role: 'resident', unitId: 'u5', email: 'carlos@correo.mx', phone: '+525520000005', vehicles: ['NHT2291'] },
+    { id: 'res3', name: 'Sofía Herrera', role: 'resident', unitId: 'u7', email: 'sofia@correo.mx', phone: '+525520000007', vehicles: [] },
+    { id: 'res4', name: 'Roberto Garza', role: 'resident', unitId: 'u9', email: 'roberto@correo.mx', phone: '+525520000009', vehicles: ['MKD771B'] },
     {
-      id: 'res5', name: 'Mariana López', role: 'resident', unitId: 'u11', email: 'mariana@correo.mx', phone: '+525520000011', vehicles: [],
-      auth: { status: 'pending', failed: 0, lockedUntil: null, sessionVersion: 1, invite: { purpose: 'activate', tokenHash: DEMO_INVITE.tokenHash, codeHash: DEMO_INVITE.codeHash, expiresAt: h(48), attempts: 0, createdAt: h(-1) } },
-    },
+      id: 'res5', name: 'Mariana López', role: 'resident', unitId: 'u11', email: 'mariana@correo.mx', phone: '+525520000011', vehicles: [] },
   ];
 
   const mkPass = (p) => {
     const pass = { uses: [], status: 'active', days: [], timeFrom: '00:00', timeTo: '23:59', maxUses: 1, createdAt: d(-1), ...p };
-    pass.token = buildToken(pass);
+    pass.token = buildToken(pass, sign);
     return pass;
   };
   const passes = [
@@ -121,13 +125,13 @@ function demoReceipt() {
 }
 
 // Residencial pequeño adicional para mostrar el portal de empresa con varias residencias.
-function seedSecondTenant() {
+export function seedSecondTenant() {
   const units = Array.from({ length: 8 }, (_, i) => ({ id: `u${i + 1}`, label: `Depto ${101 + i}`, street: 'Torre A' }));
   return {
     version: 1,
     settings: { name: 'Residencial Los Robles', monthlyFee: 1100, dueDay: 5, lateFee: 100, bank: { name: 'Banorte', clabe: '072 180 0099 8877 6655', holder: 'Condominio Los Robles A.C.' }, amenities: [{ id: 'am1', name: 'Salón de usos múltiples', capacity: 40, open: '09:00', close: '22:00', deposit: 800 }], generalProviders: ['Recolección de basura', 'Gas', 'Jardinería'] },
     units,
-    users: [{ id: 'adm_t2', name: 'Ricardo Salas', role: 'admin', email: 'admin@losrobles.mx', phone: '+525533330001', auth: { status: 'active', ...DEMO_AUTH.adm_t2, failed: 0, lockedUntil: null, sessionVersion: 1, passwordChangedAt: d(-10) } }],
+    users: [{ id: 'adm_t2', name: 'Ricardo Salas', role: 'admin', email: 'admin@losrobles.mx', phone: '+525533330001' }],
     passes: [], accessLogs: [], payments: [], notices: [], notifications: [], reservations: [], incidents: [], packages: [], polls: [], expenses: [], sos: [],
   };
 }
@@ -138,8 +142,8 @@ export const PLANS = [
   { id: 'premium', name: 'Premium', price: 5490, maxUnits: 1000, features: ['Todo lo de Profesional', 'Varias casetas', 'Soporte prioritario', 'Reportes avanzados'] },
 ];
 
-// Estado completo: la empresa (plataforma) y los datos de cada residencial.
-export function seedRoot() {
+/** Datos de la empresa: residencias, planes, personal y cargos de los últimos meses. */
+export function seedCompany() {
   const months = lastMonths(3);
   const residencias = [
     { id: 't1', name: 'Residencial Las Palmas', address: 'Av. Las Palmas 120, Zapopan, Jal.', plan: 'pro', status: 'active', createdAt: d(-200), contact: 'Laura Méndez' },
@@ -153,23 +157,11 @@ export function seedRoot() {
       invoices.push({ id: `inv_${r.id}_${m}`, tenantId: r.id, period: m, amount: price, status: paid ? 'paid' : 'pending', dueDate: `${m}-10`, method: paid ? 'transfer' : null, reference: paid ? `SPEI-${m.replace('-', '')}-${r.id}` : '', paidAt: paid ? new Date(`${m}-08T12:00:00`).toISOString() : null, createdAt: new Date(`${m}-01T09:00:00`).toISOString() });
     });
   });
-  const tenantUser = { name: 'Mariana López', email: 'mariana@correo.mx', phone: '+525520000011' };
-  const outbox = [
-    { id: 'msg_seed1', channel: 'email', to: tenantUser.email, subject: 'Activa tu cuenta · Residencial Las Palmas', body: `Hola ${tenantUser.name}:\n\nSe creó tu cuenta en Residencial Las Palmas. Para activarla abre el enlace de activación.\n\nTambién te enviamos un código de 6 dígitos por WhatsApp. El enlace vence en 48 horas y sólo se puede usar una vez.`, meta: { kind: 'invite', token: DEMO_INVITE.token, email: tenantUser.email }, at: h(-1) },
-    { id: 'msg_seed2', channel: 'whatsapp', to: tenantUser.phone, subject: null, body: `Residencial Las Palmas: tu código de activación es ${DEMO_INVITE.code}. Vence en 48 h. No lo compartas con nadie.`, meta: { kind: 'invite-code', code: DEMO_INVITE.code }, at: h(-1) },
-  ];
   return {
-    version: 2,
-    platform: {
-      company: { name: 'Residencial Cloud' },
-      staff: [{ id: 'stf1', name: 'Dirección general', email: 'empresa@residencial.cloud', phone: '+525500000000', role: 'owner', auth: { status: 'active', ...DEMO_AUTH.stf1, failed: 0, lockedUntil: null, sessionVersion: 1 } }],
-      plans: PLANS,
-      residencias,
-      invoices,
-      audit: [{ id: 'au_seed', at: h(-1), tenantId: 't1', actor: 'Laura Méndez', action: 'Usuario creado', target: 'Mariana López', severity: 'info' }],
-      outbox,
-      mfa: {},
-    },
-    tenants: { t1: seedTenant(), t2: seedSecondTenant() },
+    company: { name: 'Residencial Cloud' },
+    staff: [{ id: 'stf1', name: 'Dirección general', email: 'empresa@residencial.cloud', phone: '+525500000000', role: 'owner' }],
+    plans: PLANS,
+    residencias,
+    invoices,
   };
 }

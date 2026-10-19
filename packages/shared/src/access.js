@@ -1,34 +1,7 @@
-// Códigos de acceso con caducidad.
-// El QR contiene: RES1.<idPase>.<expiraEpoch>.<firma>. La firma evita que alguien invente un código.
-// IMPORTANTE (producción): la firma debe generarse y validarse en el servidor con HMAC-SHA256
-// y una clave secreta que nunca llegue al navegador. Aquí se firma en el cliente sólo para la demo.
-const SECRET = import.meta.env.VITE_ACCESS_SECRET || 'demo-cambiar-en-produccion';
-
-function fnv(str) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(36);
-}
-const sign = (payload) => fnv(payload + '|' + SECRET) + fnv(SECRET + '|' + payload);
-
-export function buildToken(pass) {
-  const exp = Math.floor(new Date(pass.validTo).getTime() / 1000);
-  const payload = `${pass.id}.${exp}`;
-  return `RES1.${payload}.${sign(payload)}`;
-}
-
-// Acepta el contenido del QR o el código corto de 6 caracteres.
-export function parseInput(text) {
-  const t = (text || '').trim();
-  if (t.startsWith('RES1.')) {
-    const [, id, exp, sig] = t.split('.');
-    return { kind: 'token', id, exp: Number(exp), signatureOk: sign(`${id}.${exp}`) === sig };
-  }
-  return { kind: 'code', code: t.toUpperCase().replace(/[^A-Z0-9]/g, '') };
-}
+// Pases de acceso con caducidad.
+// El QR contiene `RES1.<idPase>.<expiraEpoch>.<firma>`. La firma impide inventar códigos.
+// Quien llama inyecta la función `sign`: la API usa HMAC-SHA256 con una clave secreta del servidor;
+// el modo demo de la APP usa una firma simple porque no tiene servidor.
 
 export const PASS_TYPES = {
   familiar: 'Familiar',
@@ -39,7 +12,25 @@ export const PASS_TYPES = {
   paqueteria: 'Paquetería',
 };
 
-// Determina si un pase puede usarse en este momento.
+export const PASS_MODES = ['single', 'multi', 'recurrent'];
+
+export function buildToken(pass, sign) {
+  const exp = Math.floor(new Date(pass.validTo).getTime() / 1000);
+  const payload = `${pass.id}.${exp}`;
+  return `RES1.${payload}.${sign(payload)}`;
+}
+
+/** Acepta el contenido del QR o el código corto de 6 caracteres. */
+export function parseInput(text, sign) {
+  const t = (text || '').trim();
+  if (t.startsWith('RES1.')) {
+    const [, id, exp, sig] = t.split('.');
+    return { kind: 'token', id, exp: Number(exp), signatureOk: !!sig && sign(`${id}.${exp}`) === sig };
+  }
+  return { kind: 'code', code: t.toUpperCase().replace(/[^A-Z0-9]/g, '') };
+}
+
+/** Determina si un pase puede usarse en este momento. */
 export function evaluatePass(pass, now = new Date()) {
   if (!pass) return { ok: false, reason: 'Código no encontrado' };
   if (pass.status === 'revoked') return { ok: false, reason: 'El residente canceló este pase' };

@@ -1,0 +1,33 @@
+{
+  "name": "@residencial/web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "predev": "node scripts/copy-ocr-assets.mjs",
+    "dev": "vite",
+    "dev:demo": "node scripts/copy-ocr-assets.mjs && vite --mode demo",
+    "prebuild": "node scripts/copy-ocr-assets.mjs",
+    "build": "vite build",
+    "build:demo": "node scripts/copy-ocr-assets.mjs && vite build --mode demo",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
+    "html5-qrcode": "^2.3.8",
+    "lucide-react": "^1.59.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.4",
+    "tesseract.js": "^7.0.0",
+    "@residencial/shared": "*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.3.0"
+  },
+  "description": "APP web (React) para residentes, vigilancia, administración y el portal de empresa."
+}

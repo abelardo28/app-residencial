@@ -1,0 +1,14 @@
+{
+  "name": "@residencial/shared",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reglas de negocio compartidas por la API y la APP (validaciones, pases de acceso, operaciones del residencial y vistas por rol).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./demo": "./src/demo/seed.js"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  }
+}
