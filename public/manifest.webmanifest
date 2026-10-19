@@ -1,0 +1,9 @@
+{
+  "name": "App Residencial",
+  "short_name": "Residencial",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ece9e4",
+  "theme_color": "#2c2b29",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
