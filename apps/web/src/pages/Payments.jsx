@@ -324,8 +324,8 @@ function PayModal({ owed, onClose }) {
   );
 }
 
-// Checkout simulado mientras no haya backend conectado a Ecart Pay.
-function EcartCheckout({ total, checkout, busy, onPay, onClose }) {
+// Checkout simulado mientras no haya backend conectado a Ecart Pay (también lo usa el pago de la suscripción).
+export function EcartCheckout({ total, checkout, busy, onPay, onClose }) {
   const live = !checkout.mock;
   return (
     <Modal

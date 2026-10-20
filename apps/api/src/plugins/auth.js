@@ -41,6 +41,11 @@ async function auth(app, { config, authService }) {
     if (!SAFE_METHODS.has(request.method) && !safeEqual(request.headers['x-csrf-token'], request.session.csrfToken)) {
       throw new HttpError(403, 'La sesión no es válida para esta acción. Recarga la página.', 'csrf');
     }
+    // Residencial suspendido: el administrador sólo puede ver su vista y pagar la suscripción
+    // (rutas marcadas con `config: { allowSuspended: true }`).
+    if (request.session.restricted && !request.routeOptions.config?.allowSuspended) {
+      throw new HttpError(403, 'El servicio está suspendido. Paga la suscripción en Configuración para reactivarlo.', 'tenant_suspended');
+    }
   });
 
   /** preHandler: sólo usuarios de un residencial (opcionalmente con ciertos roles). */

@@ -27,7 +27,16 @@ import {
   normalizePhone,
   pendingCommands,
   BOT_STATE_MINUTES,
+  fmtDate,
+  inReview,
+  payable,
+  dueForAutopay,
+  dueForReminder,
+  reactivatesAfterPayment,
+  receiptError,
+  subscriptionMessages,
 } from '@residencial/shared';
+import { COMPANY_BANK } from '@residencial/shared/demo';
 import { StoreContext } from '../context';
 import { useNotificationAlerts, useToasts, withErrorToast } from '../common';
 import { seedRoot } from './seedRoot';
@@ -59,6 +68,8 @@ const validTenant = (t) => t?.settings && COLLECTIONS.every((c) => Array.isArray
 const LATER_COLLECTIONS = ['bankMovements', 'devices', 'tags', 'gateCommands', 'gateEvents', 'whatsappOptOuts'];
 const upgrade = (data) => {
   for (const t of Object.values(data.tenants)) for (const c of LATER_COLLECTIONS) t[c] = Array.isArray(t[c]) ? t[c] : [];
+  data.platform.billing ||= [];
+  data.platform.company.bank ||= COMPANY_BANK;
   return data;
 };
 function load() {
@@ -177,7 +188,11 @@ export default function DemoProvider({ children }) {
       if (now - new Date(s.lastActive).getTime() > IDLE_MINUTES * 60e3) return endSession('Cerramos tu sesión por inactividad.');
       if (!acc || acc.auth?.status !== 'active' || acc.auth.sessionVersion !== s.sv)
         return endSession('Tu sesión se cerró porque cambió el estado de tu cuenta.');
-      if (s.kind === 'tenant' && r.platform.residencias.find((x) => x.id === s.tenantId)?.status !== 'active')
+      if (
+        s.kind === 'tenant' &&
+        r.platform.residencias.find((x) => x.id === s.tenantId)?.status !== 'active' &&
+        acc.role !== 'admin' // el administrador sigue dentro para pagar la suscripción
+      )
         return endSession('El acceso a este residencial está suspendido. Contacta a la administración.');
     };
     check();
@@ -239,6 +254,8 @@ export default function DemoProvider({ children }) {
     (name, input, trusted = {}) => {
       const s = sessionRef.current;
       if (s?.kind !== 'tenant') throw new DomainError('Inicia sesión para continuar.', 401);
+      if (rootRef.current.platform.residencias.find((x) => x.id === s.tenantId)?.status !== 'active')
+        throw new DomainError('El servicio está suspendido. Paga la suscripción en Configuración para reactivarlo.', 403);
       return transact(
         s.tenantId,
         (next) => next.users.find((u) => u.id === s.userId),
@@ -398,7 +415,7 @@ export default function DemoProvider({ children }) {
         }
         if (a.status === 'suspended') return { ok: false, error: 'Tu cuenta está suspendida. Contacta a tu administrador.' };
         if (a.status !== 'active') return { ok: false, error: GENERIC_LOGIN_ERROR };
-        if (acc.scope === 'tenant') {
+        if (acc.scope === 'tenant' && acc.user.role !== 'admin') {
           const res = r.platform.residencias.find((x) => x.id === acc.tenantId);
           if (res?.status !== 'active')
             return { ok: false, error: `El acceso de ${res?.name || 'este residencial'} está suspendido. Contacta a la administración.` };
@@ -632,6 +649,245 @@ export default function DemoProvider({ children }) {
     };
   }, []);
 
+  // ---------- Suscripción del residencial (administrador) ----------
+  // Simula lo que hace la API: Ecart Pay de prueba (siempre aprueba con la tarjeta 4242), comprobantes que revisa
+  // la empresa, cobro automático y recordatorios. Ver apps/api/src/modules/subscription.
+  const subscription = useMemo(() => {
+    const link = appLink('/configuracion');
+    const SYSTEM = 'Sistema';
+    const billingOf = (x, tenantId) => x.platform.billing.find((b) => b.tenantId === tenantId) || { tenantId, autopay: false, card: null };
+    const setBilling = (x, tenantId, data) => ({
+      ...x,
+      platform: { ...x.platform, billing: [...x.platform.billing.filter((b) => b.tenantId !== tenantId), { tenantId, ...data }] },
+    });
+    const patchInvoice = (x, id, ch) => ({
+      ...x,
+      platform: { ...x.platform, invoices: x.platform.invoices.map((i) => (i.id === id ? { ...i, ...ch } : i)) },
+    });
+    const describe = (x, inv) => ({
+      org: x.tenants[inv.tenantId]?.settings.name,
+      amount: money(inv.amount),
+      period: monthLabel(inv.period),
+      due: fmtDate(`${inv.dueDate}T12:00`),
+      link,
+    });
+    const adminsOf = (x, tenantId) => x.tenants[tenantId].users.filter((u) => u.role === 'admin' && u.auth?.status === 'active');
+    const audit = (x, actor, e) => pushPlatform(x, 'audit', [auditItem({ actor, ...e })]);
+    /** Correos y WhatsApp a los administradores y una notificación en la app. */
+    function tellAdmins(x, tenantId, kind, data, note) {
+      const list = adminsOf(x, tenantId);
+      let next = pushPlatform(
+        x,
+        'outbox',
+        list.flatMap((admin) => subscriptionMessages(kind, { admin, ...data })),
+      );
+      if (!note) return next;
+      const tt = createTx({ ...next.tenants[tenantId] });
+      tt.notify(
+        list.map((a) => a.id),
+        { kind: 'payment', link: '/configuracion', ...note },
+      );
+      return { ...next, tenants: { ...next.tenants, [tenantId]: tt.next } };
+    }
+    function markPaid(x, actor, inv, { method, reference, card }) {
+      const d = describe(x, inv);
+      let next = patchInvoice(x, inv.id, { status: 'paid', method, reference: reference || '', paidAt: nowIso() });
+      next = audit(next, actor, {
+        tenantId: inv.tenantId,
+        action: 'Pago de suscripción registrado',
+        target: `${d.org} · ${d.period} · ${d.amount}`,
+      });
+      next = tellAdmins(
+        next,
+        inv.tenantId,
+        'paid',
+        { ...d, card },
+        { title: 'Pago de suscripción recibido', body: `${d.period} · ${d.amount}` },
+      );
+      const res = next.platform.residencias.find((r) => r.id === inv.tenantId);
+      if (reactivatesAfterPayment(res, next.platform.invoices)) {
+        next = {
+          ...next,
+          platform: {
+            ...next.platform,
+            residencias: next.platform.residencias.map((r) =>
+              r.id === res.id ? { ...r, status: 'active', statusReason: '', statusAt: nowIso() } : r,
+            ),
+          },
+        };
+        next = pushPlatform(
+          next,
+          'outbox',
+          adminsOf(next, res.id).flatMap((admin) => templates.serviceStatus({ admin, org: res.name, active: true })),
+        );
+        next = audit(next, SYSTEM, {
+          tenantId: res.id,
+          action: 'Residencial reactivado',
+          target: res.name,
+          detail: 'Se puso al corriente con la suscripción',
+        });
+      }
+      return next;
+    }
+    const me = () => {
+      const s = sessionRef.current;
+      const u = s?.kind === 'tenant' && rootRef.current.tenants[s.tenantId]?.users.find((x) => x.id === s.userId);
+      if (u?.role !== 'admin') throw new DomainError('No tienes permiso para hacer esto.', 403);
+      return { tenantId: s.tenantId, name: u.name };
+    };
+    const mustPayable = (tenantId, id) => {
+      const inv = rootRef.current.platform.invoices.find((i) => i.id === id && i.tenantId === tenantId);
+      if (!inv) throw new DomainError('El cargo no existe.', 404);
+      if (!payable(inv))
+        throw new DomainError(inReview(inv) ? 'Ya enviaste un comprobante de este cargo.' : 'Este cargo ya no está pendiente.', 409);
+      return inv;
+    };
+    const run = (fn) => withErrorToast(toast, fn);
+
+    /** Cobro automático y recordatorios (en la API corre cada hora). */
+    function runJobs(now = new Date()) {
+      const r = { charged: 0, reminded: 0 };
+      setRoot((x) => {
+        let next = x;
+        for (const inv of x.platform.invoices) {
+          const res = x.platform.residencias.find((t) => t.id === inv.tenantId);
+          if (!res || !next.tenants[inv.tenantId]) continue;
+          const b = billingOf(next, inv.tenantId);
+          if (dueForAutopay(inv, b, now)) {
+            next = patchInvoice(next, inv.id, { autopayAttemptAt: now.toISOString() });
+            next = markPaid(next, SYSTEM, inv, { method: 'ecartpay', reference: uid('ecp_chg_'), card: b.card.last4 });
+            r.charged++;
+          } else if (res.status === 'active' && dueForReminder(inv, b, now)) {
+            const d = describe(next, inv);
+            next = patchInvoice(next, inv.id, { remindedAt: now.toISOString() });
+            next = tellAdmins(next, inv.tenantId, 'due', d, {
+              title: 'Tu suscripción está por vencer',
+              body: `${d.period} · ${d.amount} · vence el ${d.due}`,
+            });
+            r.reminded++;
+          }
+        }
+        return next;
+      });
+      return r;
+    }
+
+    return {
+      runJobs,
+      startCard: (invoiceId, saveCard) =>
+        run(async () => {
+          const { tenantId } = me();
+          const inv = mustPayable(tenantId, invoiceId);
+          const d = describe(rootRef.current, inv);
+          return {
+            id: uid('ecp_test_'),
+            invoiceId,
+            saveCard,
+            amount: inv.amount,
+            concept: `Suscripción ${d.period} · ${d.amount}`,
+            checkoutUrl: null,
+            mock: true,
+          };
+        }),
+      confirmCard: (checkout) =>
+        run(async () => {
+          const { tenantId, name } = me();
+          const inv = mustPayable(tenantId, checkout.invoiceId);
+          setRoot((x) => {
+            let next = markPaid(x, name, inv, { method: 'ecartpay', reference: checkout.id, card: '4242' });
+            if (checkout.saveCard) {
+              next = setBilling(next, tenantId, { autopay: true, card: { brand: 'Visa', last4: '4242' } });
+              next = audit(next, name, { tenantId, action: 'Cobro automático activado', target: 'Visa •••• 4242' });
+            }
+            return next;
+          });
+          return { status: 'paid' };
+        }),
+      submitTransfer: (invoiceId, { reference, receipt }) =>
+        run(async () => {
+          const { tenantId, name } = me();
+          const inv = mustPayable(tenantId, invoiceId);
+          const err = receiptError(receipt);
+          if (err) throw new DomainError(err, 400);
+          setRoot((x) => {
+            const d = describe(x, inv);
+            let next = patchInvoice(x, inv.id, { review: { reference, receipt, submittedAt: nowIso(), by: name } });
+            next = audit(next, name, {
+              tenantId,
+              action: 'Comprobante de suscripción enviado',
+              target: `${d.period} · ${d.amount}`,
+              detail: reference,
+            });
+            return pushPlatform(
+              next,
+              'outbox',
+              x.platform.staff.flatMap((staff) => subscriptionMessages('receipt', { staff, ...d })),
+            );
+          });
+        }),
+      setAutopay: (enabled) =>
+        run(async () => {
+          const { tenantId, name } = me();
+          const b = billingOf(rootRef.current, tenantId);
+          if (enabled && !b.card) throw new DomainError('Primero paga con tarjeta y marca «Cobrar automáticamente».', 409);
+          setRoot((x) =>
+            audit(setBilling(x, tenantId, { ...b, autopay: enabled }), name, {
+              tenantId,
+              action: enabled ? 'Cobro automático activado' : 'Cobro automático desactivado',
+            }),
+          );
+        }),
+      removeCard: () =>
+        run(async () => {
+          const { tenantId, name } = me();
+          setRoot((x) =>
+            audit(setBilling(x, tenantId, { autopay: false, card: null }), name, {
+              tenantId,
+              action: 'Tarjeta eliminada',
+              severity: 'warn',
+            }),
+          );
+        }),
+      // Portal de la empresa
+      markPaid: (x, actor, inv, payment) => markPaid(x, actor, inv, payment),
+      approveTransfer: (actor, id) =>
+        setRoot((x) => {
+          const inv = x.platform.invoices.find((i) => i.id === id);
+          if (!inv || !inReview(inv)) return x;
+          const next = markPaid(x, actor, inv, { method: 'transfer', reference: inv.review.reference });
+          return patchInvoice(next, id, { review: { ...inv.review, approvedAt: nowIso(), approvedBy: actor } });
+        }),
+      rejectTransfer: (actor, id, reason) =>
+        setRoot((x) => {
+          const inv = x.platform.invoices.find((i) => i.id === id);
+          if (!inv || !inReview(inv)) return x;
+          const d = describe(x, inv);
+          let next = patchInvoice(x, id, { review: { ...inv.review, receipt: null, rejectedAt: nowIso(), rejectReason: reason } });
+          next = audit(next, actor, {
+            tenantId: inv.tenantId,
+            action: 'Comprobante de suscripción rechazado',
+            target: d.period,
+            detail: reason,
+            severity: 'warn',
+          });
+          return tellAdmins(
+            next,
+            inv.tenantId,
+            'rejected',
+            { ...d, reason },
+            { title: 'Comprobante rechazado', body: `${d.period}: ${reason}` },
+          );
+        }),
+    };
+  }, [toast]);
+
+  // Tareas de la suscripción: al abrir la demo y cada minuto (en la API, cada hora)
+  useEffect(() => {
+    subscription.runJobs();
+    const iv = setInterval(() => subscription.runJobs(), 60e3);
+    return () => clearInterval(iv);
+  }, [subscription]);
+
   // ---------- Operaciones de la empresa (portal) ----------
   const platform = useMemo(() => {
     const actor = () => rootRef.current.platform.staff.find((u) => u.id === sessionRef.current?.userId)?.name || 'Empresa';
@@ -753,6 +1009,7 @@ export default function DemoProvider({ children }) {
               createdAt: nowIso(),
             }));
           created = items.length;
+          setTimeout(() => subscription.runJobs(), 0); // cobra en ese momento a quienes tienen cobro automático
           return items.length
             ? audit(pushPlatform(x, 'invoices', items), {
                 action: 'Cargos generados',
@@ -763,22 +1020,20 @@ export default function DemoProvider({ children }) {
         return created;
       },
       async payInvoice(id, { method, reference }) {
-        setRoot((x) => {
-          const inv = x.platform.invoices.find((i) => i.id === id);
-          const res = x.platform.residencias.find((r) => r.id === inv.tenantId);
-          const next = {
-            ...x,
-            platform: {
-              ...x.platform,
-              invoices: x.platform.invoices.map((i) => (i.id === id ? { ...i, status: 'paid', method, reference, paidAt: nowIso() } : i)),
-            },
-          };
-          return audit(next, {
-            tenantId: inv.tenantId,
-            action: 'Pago de suscripción registrado',
-            target: `${res?.name} · ${monthLabel(inv.period)} · ${money(inv.amount)}`,
-          });
-        });
+        setRoot((x) =>
+          subscription.markPaid(
+            x,
+            actor(),
+            x.platform.invoices.find((i) => i.id === id),
+            { method, reference },
+          ),
+        );
+      },
+      async approveTransfer(id) {
+        subscription.approveTransfer(actor(), id);
+      },
+      async rejectTransfer(id, reason) {
+        subscription.rejectTransfer(actor(), id, reason);
       },
       async cancelInvoice(id) {
         setRoot((x) =>
@@ -883,13 +1138,14 @@ export default function DemoProvider({ children }) {
       auth,
       accounts,
       platform,
+      subscription,
       whatsapp,
       gateSim,
       authNotice,
       toast,
       toasts,
     }),
-    [root, db, me, staffMe, session, actions, auth, accounts, platform, whatsapp, gateSim, authNotice, toast, toasts],
+    [root, db, me, staffMe, session, actions, auth, accounts, platform, subscription, whatsapp, gateSim, authNotice, toast, toasts],
   );
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

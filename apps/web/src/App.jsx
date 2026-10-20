@@ -2,6 +2,7 @@ import { Component } from 'react';
 import { HashRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { StoreProvider, useStore, resetStorage } from './data/store';
 import Layout from './components/Layout';
+import { SuspendedAdmin } from './components/Subscription';
 import Auth from './pages/auth/Auth';
 import PortalRoutes from './pages/portal/Portal';
 import ResidentHome from './pages/ResidentHome';
@@ -35,11 +36,13 @@ function Only({ roles, children }) {
 }
 
 function Routed() {
-  const { me, session, staffMe } = useStore();
+  const { me, session, staffMe, root } = useStore();
   const { pathname } = useLocation();
   if (pathname === '/qr') return <PublicPass />; // pase abierto por la visita, sin sesión
   if (session?.kind === 'platform' && staffMe) return <PortalRoutes />;
   if (!me) return <Auth />;
+  if (me.role === 'admin' && root.platform.residencias.find((r) => r.id === session.tenantId)?.status === 'suspended')
+    return <SuspendedAdmin />; // sólo puede pagar la suscripción para reactivar el servicio
   return (
     <Routes>
       <Route element={<Layout />}>

@@ -14,7 +14,19 @@ const toInvoice = (r) => ({
   reference: r.reference,
   paidAt: r.paid_at,
   createdAt: r.created_at,
+  review: parseJson(r.review, null),
+  remindedAt: r.reminded_at,
+  autopayAttemptAt: r.autopay_attempt_at,
 });
+const toBilling = (r) => ({
+  tenantId: r.tenant_id,
+  autopay: !!r.autopay,
+  card: r.card_token ? { brand: r.card_brand, last4: r.card_last4 } : null,
+  cardToken: r.card_token,
+  updatedAt: r.updated_at,
+});
+/** Lo que pueden ver las pantallas (sin el identificador de la tarjeta). */
+export const publicBilling = (b) => ({ tenantId: b.tenantId, autopay: b.autopay, card: b.card });
 const toAudit = (r) => ({
   id: r.id,
   at: r.at,
@@ -75,6 +87,10 @@ export function platformRepository(db) {
       db
         .prepare("UPDATE invoices SET status = 'paid', method = ?, reference = ?, paid_at = ? WHERE id = ?")
         .run(method, reference, paidAt, id),
+    setInvoiceReview: (id, review) => db.prepare('UPDATE invoices SET review = ? WHERE id = ?').run(review ? json(review) : null, id),
+    markReminded: (id, at) => db.prepare('UPDATE invoices SET reminded_at = ? WHERE id = ?').run(at, id),
+    markAutopayAttempt: (id, at) => db.prepare('UPDATE invoices SET autopay_attempt_at = ? WHERE id = ?').run(at, id),
+    pendingInvoices: () => db.prepare("SELECT * FROM invoices WHERE status = 'pending' ORDER BY due_date").all().map(toInvoice),
     voidInvoice: (id) => db.prepare("UPDATE invoices SET status = 'void' WHERE id = ?").run(id),
     overdueTenants: (beforeDate) =>
       db
@@ -83,6 +99,21 @@ export function platformRepository(db) {
         )
         .all(beforeDate)
         .map((r) => r.id),
+
+    // ---------- Cobro automático de la suscripción ----------
+    billing(tenantId) {
+      const r = db.prepare('SELECT * FROM subscription_billing WHERE tenant_id = ?').get(tenantId);
+      return r ? toBilling(r) : { tenantId, autopay: false, card: null, cardToken: null };
+    },
+    billingAll: () => db.prepare('SELECT * FROM subscription_billing').all().map(toBilling),
+    saveBilling: (tenantId, { autopay, card, cardToken }, by) =>
+      db
+        .prepare(
+          `INSERT INTO subscription_billing (tenant_id, autopay, card_brand, card_last4, card_token, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(tenant_id) DO UPDATE SET autopay = excluded.autopay, card_brand = excluded.card_brand, card_last4 = excluded.card_last4,
+          card_token = excluded.card_token, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+        )
+        .run(tenantId, autopay ? 1 : 0, card?.brand ?? null, card?.last4 ?? null, cardToken ?? null, new Date().toISOString(), by ?? null),
 
     // ---------- Auditoría ----------
     audit(entry) {
@@ -124,9 +155,19 @@ export function platformRepository(db) {
     createCheckout: (c) =>
       db
         .prepare(
-          'INSERT INTO ecartpay_checkouts (id, tenant_id, user_id, periods, amount, checkout_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO ecartpay_checkouts (id, tenant_id, user_id, periods, amount, checkout_url, created_at, invoice_id, save_card) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         )
-        .run(c.id, c.tenantId, c.userId, json(c.periods), c.amount, c.checkoutUrl, c.createdAt),
+        .run(
+          c.id,
+          c.tenantId,
+          c.userId,
+          json(c.periods || []),
+          c.amount,
+          c.checkoutUrl,
+          c.createdAt,
+          c.invoiceId ?? null,
+          c.saveCard ? 1 : 0,
+        ),
     checkout(id) {
       const r = db.prepare('SELECT * FROM ecartpay_checkouts WHERE id = ?').get(id);
       return (
@@ -138,6 +179,8 @@ export function platformRepository(db) {
           amount: r.amount,
           status: r.status,
           checkoutUrl: r.checkout_url,
+          invoiceId: r.invoice_id,
+          saveCard: !!r.save_card,
         }
       );
     },

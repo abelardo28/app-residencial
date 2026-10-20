@@ -72,6 +72,10 @@ Correos y WhatsApp se guardan en la tabla `outbox` en la misma transacción que 
 
 Los equipos nunca reciben conexiones entrantes: el agente de caseta abre `GET /api/v1/devices/stream` (SSE) con un token `RD1.<residencial>.<equipo>.<versión>.<firma>` (HMAC con la clave del servidor; renovarlo sube la versión y revoca el anterior). Las órdenes de apertura se guardan como registros (`gateCommands`) con vigencia de 20 s; el stream las envía al crearse y el agente confirma con `POST /devices/commands/:id/ack`. Las lecturas de tags y placas llegan a `POST /devices/events` y se resuelven con la operación `gateEvent`, que corre con el rol `device`. La tablet de vigilancia descarga con `offlinePack` las huellas SHA-256 de los QR vigentes para validar sin internet; las entradas guardadas se envían con `offlineAt` y el servidor marca los conflictos en lugar de rechazarlos.
 
+### Suscripción
+
+`modules/subscription` cobra la suscripción de cada residencial: tarjeta con Ecart Pay (con tarjeta guardada para el cobro automático en `subscription_billing`; la vista nunca incluye su identificador), transferencia con comprobante que queda en `invoices.review` hasta que la empresa decide, y una tarea cada hora (`runJobs`) que cobra las tarjetas y envía recordatorios, marcando `autopay_attempt_at` y `reminded_at` para no repetir. Las reglas de estado y los textos son de `shared/subscription.js`, igual que en la demo. Con el residencial suspendido, el administrador conserva una sesión restringida: `authenticate` rechaza con `tenant_suspended` toda ruta que no esté marcada con `config: { allowSuspended: true }` (vista, tiempo real y pago).
+
 ### APP
 
 `data/store.jsx` elige el proveedor según `VITE_DATA_MODE`. Los dos (`data/api/ApiProvider.jsx` y `data/demo/DemoProvider.jsx`) exponen exactamente la misma forma (`root`, `db`, `me`, `session`, `actions`, `auth`, `accounts`, `platform`…) y todas las acciones devuelven promesas. Las pantallas esperan el resultado antes de mostrar "listo" y, si algo falla, el proveedor muestra el motivo que dio la API.
@@ -79,7 +83,7 @@ Los equipos nunca reciben conexiones entrantes: el agente de caseta abre `GET /a
 ## Pruebas
 
 - `packages/shared/test`: reglas puras (roles, pagos duplicados, reservas empalmadas, firma de QR, vistas por rol, contraseñas).
-- `apps/api/test`: integración HTTP con la base en memoria: inicio de sesión, bloqueo, verificación en dos pasos, CSRF, activación de un solo uso, restablecimiento, permisos por rol, aislamiento entre residenciales, campos protegidos, Ecart Pay verificado e idempotente, suspensión de residenciales.
+- `apps/api/test`: integración HTTP con la base en memoria: inicio de sesión, bloqueo, verificación en dos pasos, CSRF, activación de un solo uso, restablecimiento, permisos por rol, aislamiento entre residenciales, campos protegidos, Ecart Pay verificado e idempotente, suspensión de residenciales, suscripción (tarjeta, cobro automático y rechazo, comprobantes, recordatorios y reactivación).
 
 ## Pendientes conocidos
 

@@ -21,16 +21,18 @@ import {
   Users,
   Wallet,
   Search,
+  Eye,
+  FileText,
 } from 'lucide-react';
 import { useStore } from '../../data/store';
 import { money, monthLabel, monthKey, fmtDate, initials, timeAgo } from '../../lib/utils';
 import { Badge, Button, Card, CardHead, Chips, Field, Modal, PageHead, Stat, Tabs } from '../../components/ui';
 import { AccountBadge, AccountModal, AuditList, InviteModal, ROLE_NAME } from '../../components/Accounts';
 import { DemoOutboxButton } from '../../components/DemoOutbox';
+import { INVOICE_STATE } from '../../components/Subscription';
+import { invoiceState } from '@residencial/shared';
 
-const today = () => new Date().toISOString().slice(0, 10);
-export const invoiceState = (i) => (i.status === 'pending' && i.dueDate < today() ? 'overdue' : i.status);
-const INV = { paid: ['Pagado', 'ok'], pending: ['Pendiente', 'warn'], overdue: ['Vencido', 'bad'], void: ['Cancelado', ''] };
+const INV = INVOICE_STATE;
 const METHODS = { transfer: 'Transferencia', cash: 'Efectivo', card: 'Tarjeta', ecartpay: 'Ecart Pay' };
 const PLURAL = { resident: 'Residentes', guard: 'Vigilantes', admin: 'Administradores' };
 const RES_STATUS = { active: ['Activo', 'ok'], suspended: ['Suspendido', 'bad'] };
@@ -64,7 +66,7 @@ function PortalLayout() {
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   useEffect(() => window.scrollTo(0, 0), [loc.pathname]);
-  const overdue = root.platform.invoices.filter((i) => invoiceState(i) === 'overdue').length;
+  const overdue = root.platform.invoices.filter((i) => ['overdue', 'review'].includes(invoiceState(i))).length;
   const current = LINKS.find(([to]) => (to === '/' ? loc.pathname === '/' : loc.pathname.startsWith(to)));
   return (
     <div className="shell portal-shell">
@@ -160,7 +162,7 @@ function useResidencias() {
           units: t?.units.length || 0,
           users: t?.users.length || 0,
           admins: t?.users.filter((u) => u.role === 'admin') || [],
-          debt: inv.filter((i) => ['pending', 'overdue'].includes(invoiceState(i))).reduce((s, i) => s + i.amount, 0),
+          debt: inv.filter((i) => i.status === 'pending').reduce((s, i) => s + i.amount, 0),
           overdue: inv.some((i) => invoiceState(i) === 'overdue'),
         };
       }),
@@ -177,7 +179,7 @@ function Overview() {
   const active = list.filter((r) => r.status === 'active');
   const mrr = active.reduce((s, r) => s + (r.plan?.price || 0), 0);
   const collected = inv.filter((i) => i.status === 'paid' && i.paidAt?.slice(0, 7) === m).reduce((s, i) => s + i.amount, 0);
-  const due = inv.filter((i) => ['pending', 'overdue'].includes(invoiceState(i)));
+  const due = inv.filter((i) => i.status === 'pending');
   const overdue = due.filter((i) => invoiceState(i) === 'overdue');
   const name = (id) => root.platform.residencias.find((r) => r.id === id)?.name;
   const audit = root.platform.audit.slice(0, 8).map((e) => ({ ...e, tenantName: name(e.tenantId) }));
@@ -620,7 +622,9 @@ function SuspendModal({ r, onClose }) {
 function InvoiceList({ invoices, showName }) {
   const { root, platform, toast } = useStore();
   const [paying, setPaying] = useState(null);
+  const [reviewing, setReviewing] = useState(null);
   const name = (id) => root.platform.residencias.find((r) => r.id === id)?.name;
+  const autopay = (id) => root.platform.billing?.find((b) => b.tenantId === id && b.autopay);
   const sorted = [...invoices].sort((a, b) => b.period.localeCompare(a.period));
   if (!sorted.length) return <div className="empty">Sin cargos.</div>;
   return (
@@ -634,17 +638,31 @@ function InvoiceList({ invoices, showName }) {
                 <Receipt size={15} />
               </div>
               <div className="grow">
-                <div className="title">{showName ? name(i.tenantId) : `Suscripción ${monthLabel(i.period)}`}</div>
+                <div className="title">
+                  {showName ? name(i.tenantId) : `Suscripción ${monthLabel(i.period)}`}
+                  {i.status === 'pending' && autopay(i.tenantId) && (
+                    <Badge tone="info" style={{ marginLeft: 6 }}>
+                      Cobro automático
+                    </Badge>
+                  )}
+                </div>
                 <div className="faint">
                   {showName ? `${monthLabel(i.period)} · ` : ''}
                   {i.status === 'paid'
                     ? `Pagado ${fmtDate(i.paidAt)} · ${METHODS[i.method] || i.method}${i.reference ? ` · ${i.reference}` : ''}`
-                    : `Vence ${fmtDate(i.dueDate + 'T12:00')}`}
+                    : st === 'review'
+                      ? `Comprobante enviado por ${i.review.by} el ${fmtDate(i.review.submittedAt)}`
+                      : `Vence ${fmtDate(i.dueDate + 'T12:00')}${i.review?.rejectedAt ? ' · comprobante rechazado' : ''}`}
                 </div>
               </div>
               <div className="row" style={{ gap: 6 }}>
                 <b>{money(i.amount)}</b>
                 <InvBadge i={i} />
+                {st === 'review' && (
+                  <Button size="sm" variant="primary" onClick={() => setReviewing(i)}>
+                    <Eye size={14} /> Revisar comprobante
+                  </Button>
+                )}
                 {(st === 'pending' || st === 'overdue') && (
                   <>
                     <Button size="sm" variant="primary" onClick={() => setPaying(i)}>
@@ -677,7 +695,87 @@ function InvoiceList({ invoices, showName }) {
         })}
       </div>
       {paying && <PayModal inv={paying} onClose={() => setPaying(null)} />}
+      {reviewing && <ReviewModal inv={reviewing} name={name(reviewing.tenantId)} onClose={() => setReviewing(null)} />}
     </>
+  );
+}
+
+/** Comprobante de transferencia enviado por el administrador del residencial. */
+function ReviewModal({ inv, name, onClose }) {
+  const { platform, toast } = useStore();
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState('');
+  const isPdf = inv.review.receipt?.startsWith('data:application/pdf');
+  const done = (p, msg) =>
+    p.then(
+      () => {
+        toast(...msg);
+        onClose();
+      },
+      () => {},
+    );
+  return (
+    <Modal
+      title={`${name} · ${monthLabel(inv.period)}`}
+      onClose={onClose}
+      footer={
+        rejecting ? (
+          <>
+            <Button variant="ghost" onClick={() => setRejecting(false)}>
+              Volver
+            </Button>
+            <Button
+              variant="danger"
+              disabled={!reason.trim()}
+              onClick={() => done(platform.rejectTransfer(inv.id, reason.trim()), ['Comprobante rechazado', 'Se avisó al administrador.'])}
+            >
+              Rechazar
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="ghost" className="danger" onClick={() => setRejecting(true)}>
+              Rechazar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => done(platform.approveTransfer(inv.id), ['Pago aprobado', `${money(inv.amount)} · ${name}`])}
+            >
+              <CheckCircle2 size={15} /> Aprobar {money(inv.amount)}
+            </Button>
+          </>
+        )
+      }
+    >
+      <div className="stack">
+        <div className="kv">
+          <div>
+            Referencia <span className="mono">{inv.review.reference || '—'}</span>
+          </div>
+          <div>
+            Enviado por {inv.review.by} el {fmtDate(inv.review.submittedAt)}
+          </div>
+        </div>
+        {isPdf ? (
+          <a className="btn" href={inv.review.receipt} download={`comprobante-${inv.period}.pdf`}>
+            <FileText size={15} /> Descargar comprobante (PDF)
+          </a>
+        ) : (
+          <img className="receipt-view" src={inv.review.receipt} alt="Comprobante de la transferencia" />
+        )}
+        {rejecting && (
+          <Field label="Motivo" hint="Lo verá el administrador para enviar otro comprobante">
+            <input
+              className="input"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="No se ve el monto, otra cuenta…"
+              autoFocus
+            />
+          </Field>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -724,7 +822,7 @@ function Billing() {
   const [tab, setTab] = useState('due');
   const [days, setDays] = useState(15);
   const inv = root.platform.invoices.filter((i) =>
-    tab === 'all' ? true : tab === 'due' ? ['pending', 'overdue'].includes(invoiceState(i)) : invoiceState(i) === tab,
+    tab === 'all' ? true : tab === 'due' ? i.status === 'pending' : invoiceState(i) === tab,
   );
   const m = monthKey();
   const generate = () =>
@@ -796,7 +894,12 @@ function Billing() {
             {
               value: 'due',
               label: 'Por cobrar',
-              count: root.platform.invoices.filter((i) => ['pending', 'overdue'].includes(invoiceState(i))).length,
+              count: root.platform.invoices.filter((i) => i.status === 'pending').length,
+            },
+            {
+              value: 'review',
+              label: 'Por revisar',
+              count: root.platform.invoices.filter((i) => invoiceState(i) === 'review').length,
             },
             { value: 'overdue', label: 'Vencidos' },
             { value: 'paid', label: 'Pagados' },

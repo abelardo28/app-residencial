@@ -484,6 +484,9 @@ export const PLANS = [
   },
 ];
 
+/** Cuenta de la empresa para las transferencias de la suscripción (ejemplo). */
+export const COMPANY_BANK = { name: 'Santander', clabe: '014 180 6550 1234 5672', holder: 'Residencial Cloud S.A. de C.V.' };
+
 /** Datos de la empresa: residencias, planes, personal y cargos de los últimos meses. */
 export function seedCompany() {
   const months = lastMonths(3);
@@ -511,14 +514,16 @@ export function seedCompany() {
   residencias.forEach((r) => {
     const price = PLANS.find((p) => p.id === r.plan).price;
     months.forEach((m, i) => {
-      const paid = r.id === 't1' || i < months.length - 1;
+      const current = i === months.length - 1;
+      const paid = !current;
       invoices.push({
         id: `inv_${r.id}_${m}`,
         tenantId: r.id,
         period: m,
         amount: price,
         status: paid ? 'paid' : 'pending',
-        dueDate: `${m}-10`,
+        // Las Palmas tiene el cargo del mes por vencer (para probar el pago desde la app); Los Robles ya vencido
+        dueDate: current && r.id === 't1' ? d(3).slice(0, 10) : `${m}-10`,
         method: paid ? 'transfer' : null,
         reference: paid ? `SPEI-${m.replace('-', '')}-${r.id}` : '',
         paidAt: paid ? new Date(`${m}-08T12:00:00`).toISOString() : null,
@@ -527,7 +532,7 @@ export function seedCompany() {
     });
   });
   return {
-    company: { name: 'Residencial Cloud' },
+    company: { name: 'Residencial Cloud', bank: COMPANY_BANK },
     staff: [{ id: 'stf1', name: 'Dirección general', email: 'empresa@residencial.cloud', phone: '+525500000000', role: 'owner' }],
     plans: PLANS,
     residencias,

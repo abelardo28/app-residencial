@@ -185,6 +185,20 @@ export default function ApiProvider({ children }) {
     };
   }, [api, auth, mutate, toast]);
 
+  // ---------- Suscripción del residencial (administrador) ----------
+  const subscription = useMemo(() => {
+    const run = (fn) => withErrorToast(toast, () => mutate(fn));
+    const id = encodeURIComponent;
+    return {
+      startCard: (invoiceId, saveCard) =>
+        withErrorToast(toast, () => api.post(`/tenant/subscription/invoices/${id(invoiceId)}/checkout`, { saveCard })),
+      confirmCard: (checkout) => run(() => api.post(`/tenant/subscription/checkouts/${id(checkout.id)}/confirm`)),
+      submitTransfer: (invoiceId, data) => run(() => api.post(`/tenant/subscription/invoices/${id(invoiceId)}/transfer`, data)),
+      setAutopay: (enabled) => run(() => api.put('/tenant/subscription/autopay', { enabled })),
+      removeCard: () => run(() => api.delete('/tenant/subscription/card')),
+    };
+  }, [api, mutate, toast]);
+
   // ---------- Cuentas (administrador del residencial y empresa) ----------
   const accounts = useMemo(() => {
     const base = (tenantId, userId = '') =>
@@ -212,6 +226,8 @@ export default function ApiProvider({ children }) {
       payInvoice: (invoiceId, data) => run(() => api.post(`/platform/invoices/${id(invoiceId)}/pay`, data)),
       cancelInvoice: (invoiceId) => run(() => api.post(`/platform/invoices/${id(invoiceId)}/cancel`)),
       remindInvoice: (invoiceId) => run(() => api.post(`/platform/invoices/${id(invoiceId)}/remind`)),
+      approveTransfer: (invoiceId) => run(() => api.post(`/platform/invoices/${id(invoiceId)}/review/approve`)),
+      rejectTransfer: (invoiceId, reason) => run(() => api.post(`/platform/invoices/${id(invoiceId)}/review/reject`, { reason })),
       suspendOverdue: async (days) => (await run(() => api.post('/platform/residencias/suspend-overdue', { days }))).suspended,
       updatePlan: (planId, data) => run(() => api.patch(`/platform/plans/${id(planId)}`, data)),
     };
@@ -231,8 +247,25 @@ export default function ApiProvider({ children }) {
   );
 
   const value = useMemo(
-    () => ({ mode: 'api', api, root, db, me, staffMe, session, actions, auth, accounts, platform, whatsapp, authNotice, toast, toasts }),
-    [api, root, db, me, staffMe, session, actions, auth, accounts, platform, whatsapp, authNotice, toast, toasts],
+    () => ({
+      mode: 'api',
+      api,
+      root,
+      db,
+      me,
+      staffMe,
+      session,
+      actions,
+      auth,
+      accounts,
+      platform,
+      subscription,
+      whatsapp,
+      authNotice,
+      toast,
+      toasts,
+    }),
+    [api, root, db, me, staffMe, session, actions, auth, accounts, platform, subscription, whatsapp, authNotice, toast, toasts],
   );
   if (booting) return <div className="boot">Cargando…</div>;
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

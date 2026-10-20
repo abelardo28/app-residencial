@@ -44,6 +44,7 @@ export function seedRoot() {
       plans: company.plans,
       residencias: company.residencias,
       invoices: company.invoices,
+      billing: [],
       audit: [
         {
           id: 'au_seed',

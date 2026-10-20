@@ -18,6 +18,7 @@ import { createAccountsService } from './modules/accounts/service.js';
 import { createTenantService } from './modules/tenant/service.js';
 import { createPlatformService } from './modules/platform/service.js';
 import { createWhatsappService } from './modules/whatsapp/service.js';
+import { createSubscriptionService } from './modules/subscription/service.js';
 import authRoutes from './modules/auth/routes.js';
 import meRoutes from './modules/me/routes.js';
 import tenantRoutes, { ecartpayWebhookRoutes } from './modules/tenant/routes.js';
@@ -29,7 +30,7 @@ import deviceRoutes from './modules/devices/routes.js';
 import whatsappWebhookRoutes from './modules/whatsapp/routes.js';
 
 /** Crea las dependencias de la aplicación (base de datos, repositorios y servicios). */
-export function createContext(config, { db = openDatabase(config.DATABASE_PATH), log = console } = {}) {
+export function createContext(config, { db = openDatabase(config.DATABASE_PATH), log = console, ecartpay = createEcartPay(config) } = {}) {
   migrate(db);
   const repos = {
     db,
@@ -46,10 +47,11 @@ export function createContext(config, { db = openDatabase(config.DATABASE_PATH),
 
   const authService = createAuthService(deps);
   const accountsService = createAccountsService(deps);
-  const tenantService = createTenantService({ ...deps, ecartpay: createEcartPay(config) });
-  const platformService = createPlatformService({ ...deps, accountsService });
+  const subscriptionService = createSubscriptionService({ ...deps, ecartpay, log });
+  const tenantService = createTenantService({ ...deps, ecartpay, subscription: subscriptionService });
+  const platformService = createPlatformService({ ...deps, accountsService, subscription: subscriptionService });
   const whatsappService = createWhatsappService({ ...deps, tenantService, log });
-  return { ...deps, authService, accountsService, tenantService, platformService, whatsappService };
+  return { ...deps, authService, accountsService, tenantService, platformService, subscriptionService, whatsappService };
 }
 
 export async function buildApp(config, options = {}) {
@@ -97,8 +99,14 @@ export async function buildApp(config, options = {}) {
     ctx.repos.whatsapp.purge(new Date(Date.now() - 7 * 86400e3).toISOString());
   }, 10 * 60e3);
   purge.unref();
+  // Cobros automáticos y recordatorios de la suscripción (cada hora; cada cargo se intenta una vez al día)
+  const jobs = () => ctx.subscriptionService.runJobs().catch((err) => app.log.error({ err }, 'Tareas de suscripción'));
+  const subscriptionJobs = config.isTest ? null : setInterval(jobs, 60 * 60e3);
+  subscriptionJobs?.unref();
+  if (!config.isTest) setImmediate(jobs);
   app.addHook('onClose', async () => {
     clearInterval(purge);
+    clearInterval(subscriptionJobs);
     if (!options.db) ctx.repos.db.close();
   });
   return app;

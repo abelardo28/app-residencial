@@ -51,7 +51,11 @@ async function sendWhatsApp(config, m) {
     message = { type: 'text', text: { body: m.body, preview_url: true } };
   } else if (m.meta?.template) {
     // Avisos y recordatorios inician la conversación: Meta exige una plantilla aprobada.
-    const name = { notice: config.WHATSAPP_NOTICE_TEMPLATE, reminder: config.WHATSAPP_REMINDER_TEMPLATE }[m.meta.template];
+    const name = {
+      notice: config.WHATSAPP_NOTICE_TEMPLATE,
+      reminder: config.WHATSAPP_REMINDER_TEMPLATE,
+      subscription: config.WHATSAPP_SUBSCRIPTION_TEMPLATE,
+    }[m.meta.template];
     if (!name) throw new Error(`Plantilla de WhatsApp desconocida: ${m.meta.template}`);
     const parameters = (m.meta.params || []).map((text) => ({ type: 'text', text: String(text).slice(0, 1000) }));
     message = { type: 'template', template: { name, language: lang, components: [{ type: 'body', parameters }] } };

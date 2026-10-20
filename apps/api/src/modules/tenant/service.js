@@ -7,8 +7,6 @@ import { passSigner, sha256 } from '../../lib/crypto.js';
 import { HttpError, badRequest, forbidden, notFound } from '../../lib/errors.js';
 import { toUserView } from '../../repositories/accounts.js';
 
-const COMPANY = { name: 'Residencial Cloud' };
-
 export const toResidencia = (t) => ({
   id: t.id,
   name: t.name,
@@ -21,7 +19,7 @@ export const toResidencia = (t) => ({
   contact: t.contact,
 });
 
-export function createTenantService({ repos, config, dispatch, events, ecartpay }) {
+export function createTenantService({ repos, config, dispatch, events, ecartpay, subscription }) {
   const { db, accounts, tenants, platform } = repos;
   const sign = passSigner(config.ACCESS_SECRET);
 
@@ -78,10 +76,11 @@ export function createTenantService({ repos, config, dispatch, events, ecartpay 
       const isAdmin = acc.role === 'admin';
       return {
         platform: {
-          company: COMPANY,
+          company: { name: subscription.company.name, bank: isAdmin ? subscription.company.bank : null },
           residencias: [toResidencia(tenant)],
           plans: isAdmin ? platform.plans() : [],
           invoices: isAdmin ? platform.invoices(acc.tenantId) : [],
+          billing: isAdmin ? [subscription.view(acc.tenantId)] : [],
           audit: isAdmin ? platform.auditLog({ tenantId: acc.tenantId, limit: 100 }) : [],
           outbox: [],
           staff: [],
@@ -160,9 +159,10 @@ export function createTenantService({ repos, config, dispatch, events, ecartpay 
         throw badRequest('Aviso inválido.');
       }
       const id = event?.data?.id || event?.id;
-      if (!id || !platform.checkout(id)) return { ignored: true };
+      const c = id && platform.checkout(id);
+      if (!c) return { ignored: true };
       // No se confía en el estado del aviso: se vuelve a consultar al proveedor.
-      return this.confirmCheckout(id, null);
+      return c.invoiceId ? subscription.confirmCardPayment(id, null) : this.confirmCheckout(id, null);
     },
   };
 }

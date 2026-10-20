@@ -831,6 +831,9 @@ td {
   padding: 14px 16px;
   border-radius: var(--r);
 }
+.banner > svg {
+  flex-shrink: 0;
+}
 .banner.bad {
   background: var(--bad-bg);
   color: var(--bad);
@@ -1888,4 +1891,51 @@ button.list-item.clickable:hover {
   flex: 1;
 }
 @media (max-width: 760px) {
+}
+
+/* Suscripción del residencial */
+.sub-autopay {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: var(--r);
+  background: var(--surface-sunk);
+}
+.sub-autopay .title {
+  font-weight: 500;
+}
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+.check input {
+  margin-top: 3px;
+}
+.check > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.suspended-shell {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 40px 16px calc(40px + env(safe-area-inset-bottom));
+}
+.suspended-box {
+  width: min(560px, 100%);
+}
+.receipt-view {
+  width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: var(--r);
+  background: var(--surface-sunk);
 }

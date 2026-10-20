@@ -35,6 +35,7 @@ export async function createTestApp(env = {}) {
       get: (url, opts) => request('GET', url, undefined, opts),
       post: (url, body = {}, opts) => request('POST', url, body, opts),
       patch: (url, body = {}, opts) => request('PATCH', url, body, opts),
+      put: (url, body = {}, opts) => request('PUT', url, body, opts),
       delete: (url, opts) => request('DELETE', url, undefined, opts),
       /** Inicia sesión; si se pide verificación en dos pasos, toma el código del buzón. */
       async login(email, password = PASSWORD, scope = 'tenant') {

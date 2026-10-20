@@ -14,7 +14,7 @@ const DEFAULT_SETTINGS = {
 };
 const inDays = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
 
-export function createPlatformService({ repos, templates, dispatch, events, accountsService }) {
+export function createPlatformService({ repos, templates, dispatch, events, accountsService, subscription }) {
   const { db, accounts, tenants, platform } = repos;
   const audit = (actor, e) => platform.audit({ actor: actor.name, ...e });
   const admins = (tenantId) => accounts.listByTenant(tenantId).filter((a) => a.role === 'admin');
@@ -66,10 +66,11 @@ export function createPlatformService({ repos, templates, dispatch, events, acco
       }
       return {
         platform: {
-          company: { name: 'Residencial Cloud' },
+          company: subscription.company,
           residencias: list.map(toResidencia),
           plans: platform.plans(),
           invoices: platform.invoices(),
+          billing: subscription.billingList(),
           audit: platform.auditLog({ limit: 300 }),
           outbox: [],
           staff: accounts.listStaff().map((a) => toUserView(a)),
@@ -154,14 +155,7 @@ export function createPlatformService({ repos, templates, dispatch, events, acco
     payInvoice(actor, id, { method, reference }) {
       const inv = mustInvoice(id);
       if (inv.status !== 'pending') throw conflict('Este cargo ya no está pendiente.');
-      transaction(db, () => {
-        platform.payInvoice(id, { method, reference: reference || '', paidAt: new Date().toISOString() });
-        audit(actor, {
-          tenantId: inv.tenantId,
-          action: 'Pago de suscripción registrado',
-          target: `${tenants.find(inv.tenantId)?.name} · ${monthLabel(inv.period)} · ${money(inv.amount)}`,
-        });
-      });
+      subscription.markPaid(actor, inv, { method, reference });
       changed(inv.tenantId);
     },
 

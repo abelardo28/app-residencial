@@ -2,21 +2,13 @@ import { useState } from 'react';
 import { billingSettings, gateSettings } from '@residencial/shared';
 import { Link } from 'react-router-dom';
 import { useStore } from '../data/store';
-import { money, monthLabel, fmtDate } from '../lib/utils';
-import { invoiceState } from './portal/Portal';
+import { SubscriptionCard } from '../components/Subscription';
 import { Badge, Button, Card, CardHead, Field, FileDrop, PageHead } from '../components/ui';
 import { compressImage } from '../lib/utils';
 import { coverOf, DEMO_COVER } from '../lib/cover';
 
 export default function SettingsPage() {
-  const { db, actions, toast, root, session, mode } = useStore();
-  const res = root.platform.residencias.find((r) => r.id === session.tenantId);
-  const plan = root.platform.plans.find((p) => p.id === res?.plan);
-  const invoices = root.platform.invoices
-    .filter((i) => i.tenantId === session.tenantId && i.status !== 'void')
-    .sort((a, b) => b.period.localeCompare(a.period))
-    .slice(0, 6);
-  const INV = { paid: ['Pagado', 'ok'], pending: ['Pendiente', 'warn'], overdue: ['Vencido', 'bad'] };
+  const { db, actions, toast, mode } = useStore();
   const s = db.settings;
   const billing = billingSettings(s);
   const [gate, setGate] = useState(gateSettings(s));
@@ -242,32 +234,7 @@ export default function SettingsPage() {
             </div>
           </div>
         </Card>
-        <Card>
-          <CardHead
-            title="Suscripción"
-            subtitle={plan ? `Plan ${plan.name} · ${money(plan.price)} al mes · hasta ${plan.maxUnits} unidades` : ''}
-          />
-          <div className="list">
-            {invoices.map((i) => {
-              const [l, t] = INV[invoiceState(i)] || ['', ''];
-              return (
-                <div key={i.id} className="list-item">
-                  <div className="grow">
-                    <div className="title">{monthLabel(i.period)}</div>
-                    <div className="faint">
-                      {i.status === 'paid' ? `Pagado el ${fmtDate(i.paidAt)}` : `Vence ${fmtDate(i.dueDate + 'T12:00')}`}
-                    </div>
-                  </div>
-                  <b>{money(i.amount)}</b>
-                  <Badge tone={t}>{l}</Badge>
-                </div>
-              );
-            })}
-          </div>
-          <p className="faint" style={{ marginTop: 10 }}>
-            La suscripción la administra la empresa. Si tienes dudas sobre un cargo, contáctala directamente.
-          </p>
-        </Card>
+        <SubscriptionCard />
         {mode === 'demo' && (
           <Card>
             <CardHead title="Datos de demostración" />

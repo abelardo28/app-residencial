@@ -16,6 +16,7 @@ const ResidencialBody = z.object({
 const StatusBody = z.object({ status: z.enum(['active', 'suspended']), reason: text(200).default('') });
 const PlanBody = z.object({ plan: text(40) });
 const PayBody = z.object({ method: z.enum(['transfer', 'card', 'cash', 'ecartpay']), reference: text(80).default('') });
+const RejectBody = z.object({ reason: text(200).min(1) });
 const GenerateBody = z.object({ period: period.optional() });
 const OverdueBody = z.object({ days: z.number().int().min(1).max(120).default(15) });
 const PlanUpdateBody = z.object({
@@ -25,7 +26,7 @@ const PlanUpdateBody = z.object({
   features: z.array(text(120)).max(20).optional(),
 });
 
-export default async function platformRoutes(app, { platformService: s }) {
+export default async function platformRoutes(app, { platformService: s, subscriptionService: sub }) {
   app.addHook('preHandler', app.authenticate);
   app.addHook('preHandler', app.requireStaff);
   const ok = (reply) => reply.status(204).send();
@@ -44,9 +45,18 @@ export default async function platformRoutes(app, { platformService: s }) {
   );
   app.post('/residencias/suspend-overdue', async (req) => s.suspendOverdue(req.account, parse(OverdueBody, req.body).days));
 
-  app.post('/invoices/generate', async (req) => s.generateInvoices(req.account, parse(GenerateBody, req.body).period));
+  app.post('/invoices/generate', async (req) => {
+    const result = s.generateInvoices(req.account, parse(GenerateBody, req.body).period);
+    await sub.runJobs(); // cobra en ese momento a quienes tienen cobro automático
+    return result;
+  });
   app.post('/invoices/:id/pay', async (req, reply) => (s.payInvoice(req.account, req.params.id, parse(PayBody, req.body)), ok(reply)));
   app.post('/invoices/:id/cancel', async (req, reply) => (s.cancelInvoice(req.account, req.params.id), ok(reply)));
+  app.post('/invoices/:id/review/approve', async (req, reply) => (sub.approveTransfer(req.account, req.params.id), ok(reply)));
+  app.post(
+    '/invoices/:id/review/reject',
+    async (req, reply) => (sub.rejectTransfer(req.account, req.params.id, parse(RejectBody, req.body).reason), ok(reply)),
+  );
   app.post('/invoices/:id/remind', async (req, reply) => (s.remindInvoice(req.account, req.params.id), ok(reply)));
 
   app.patch('/plans/:id', async (req, reply) => (s.updatePlan(req.account, req.params.id, parse(PlanUpdateBody, req.body)), ok(reply)));

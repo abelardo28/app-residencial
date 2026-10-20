@@ -176,9 +176,20 @@ Todo se aplica en la API; la APP no decide nada de seguridad.
 
 - **Resumen**: residencias activas, ingreso mensual, cobrado del mes, por cobrar y actividad reciente.
 - **Residencias**: alta de residencial con su administrador (recibe invitación), cambio de plan, suspensión o reactivación del servicio con motivo, y gestión de todas sus cuentas (reenviar invitación, restablecer contraseña, suspender, desbloquear).
-- **Cobranza**: generar los cargos del mes, registrar pagos (transferencia, efectivo, tarjeta, Ecart Pay), enviar recordatorios, cancelar cargos y suspender morosos por días de atraso.
+- **Cobranza**: generar los cargos del mes, registrar pagos (transferencia, efectivo, tarjeta, Ecart Pay), revisar los comprobantes que envían los residenciales (aprobar o rechazar con motivo), enviar recordatorios, cancelar cargos y suspender morosos por días de atraso. Los residenciales con cobro automático se cobran al generar los cargos.
 - **Planes**: precio mensual y número máximo de unidades.
 - **Auditoría** filtrable por residencial, alertas y texto.
+
+### Suscripción desde la app del administrador
+
+En **Configuración → Suscripción** el administrador ve sus cargos y los paga:
+
+- **Tarjeta (Ecart Pay)**: el pago queda registrado al momento. Si marca _Cobrar automáticamente cada mes_, Ecart Pay guarda la tarjeta (la API sólo guarda su identificador, la marca y los últimos 4 dígitos) y cada cargo nuevo se cobra solo. Si la tarjeta se rechaza, se avisa por correo y en la app y se reintenta al día siguiente. Se puede pausar o quitar la tarjeta.
+- **Transferencia**: muestra la cuenta de la empresa (`COMPANY_BANK_*`) y una referencia por cargo (`SUS-T1-202610`); el administrador sube el comprobante y la empresa lo aprueba o rechaza en Cobranza.
+- **Recordatorios**: 3 días antes del vencimiento, por correo, WhatsApp (plantilla `WHATSAPP_SUBSCRIPTION_TEMPLATE` con las variables nombre, residencial, monto y vencimiento) y en la app. No se envían si hay cobro automático.
+- **Servicio suspendido**: residentes y vigilancia no entran, pero el administrador sí, a una pantalla que sólo permite pagar. Si la suspensión fue por adeudo, el servicio se reactiva solo al quedar sin cargos vencidos.
+
+Las tareas (cobro automático y recordatorios) corren cada hora en la API; cada cargo se intenta cobrar como máximo una vez al día. En la demo corren al abrirla y cada minuto: Las Palmas tiene el cargo del mes por vencer y Los Robles uno vencido para probar la suspensión.
 
 ## Análisis de competidores y diferenciadores
 
@@ -208,6 +219,7 @@ La API valida su configuración al arrancar; todas las variables están document
 | `APP_URL`                 | URL pública de la APP: enlaces de activación y CORS.                                                                                                                                                                                            |
 | `MESSAGING_PROVIDER=live` | Envía correos con **Resend** (`RESEND_API_KEY`, `EMAIL_FROM`) y WhatsApp con la **WhatsApp Business Cloud API** (`WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, plantilla de categoría _Autenticación_).                                         |
 | `ECARTPAY_MODE=live`      | Cobros reales con Ecart Pay (`ECARTPAY_PUBLIC_KEY`, `ECARTPAY_PRIVATE_KEY`, `ECARTPAY_WEBHOOK_SECRET`). Las llaves sólo viven en el servidor. Revisa los endpoints en `apps/api/src/payments/ecartpay.js` contra la documentación de tu cuenta. |
+| `COMPANY_BANK_CLABE`      | Cuenta de la empresa para que los residenciales transfieran su suscripción (con `COMPANY_BANK_NAME` y `COMPANY_BANK_HOLDER`). Sin ella sólo se ofrece el pago con tarjeta.                                                                      |
 | `TRUST_PROXY`             | `true` detrás de nginx o un balanceador, para leer la IP real.                                                                                                                                                                                  |
 
 En la APP (`apps/web/.env.example`): `VITE_DATA_MODE` (`api` o `demo`), `VITE_API_URL` (sólo si la API está en otro dominio; lo recomendado es servirla en el mismo bajo `/api`) y `VITE_VAPID_PUBLIC_KEY` para Web Push.
@@ -217,6 +229,8 @@ En la APP (`apps/web/.env.example`): `VITE_DATA_MODE` (`api` o `demo`), `VITE_AP
 1. La APP pide `POST /api/v1/tenant/payments/ecartpay/checkout` con los meses a pagar; la API calcula el monto (el cliente no lo decide) y crea el cobro.
 2. El residente paga en el checkout de Ecart Pay.
 3. La APP llama a `POST /api/v1/tenant/payments/ecartpay/:id/confirm`, o Ecart Pay avisa a `POST /api/v1/webhooks/ecartpay`. En ambos casos la API consulta el estado al proveedor y registra el pago aprobado una sola vez.
+
+La suscripción usa el mismo flujo (`/api/v1/tenant/subscription/invoices/:id/checkout` y `/subscription/checkouts/:id/confirm`) con `save_card` para el cobro automático, y cobra la tarjeta guardada con `POST /charges`. Confirma esos dos campos con la documentación de tu cuenta de Ecart Pay antes de pasar a `live`.
 
 ### OCR de placas
 
@@ -237,7 +251,7 @@ apps/
       config.js             variables de entorno validadas (zod)
       db/                   SQLite (node:sqlite), migraciones, semilla de demo
       repositories/         acceso a datos (SQL sólo aquí)
-      modules/              auth, accounts, tenant, platform, me, events, whatsapp, devices, dev (servicio + rutas)
+      modules/              auth, accounts, tenant, platform, subscription, me, events, whatsapp, devices, dev (servicio + rutas)
       plugins/              seguridad (helmet, CORS, límites) y sesión/CSRF
       messaging/            plantillas y despachador de correo/WhatsApp
       payments/             adaptador de Ecart Pay

@@ -38,6 +38,13 @@ const schema = z
     WHATSAPP_APP_SECRET: z.string().optional(),
     WHATSAPP_NOTICE_TEMPLATE: z.string().default('aviso_residencial'),
     WHATSAPP_REMINDER_TEMPLATE: z.string().default('recordatorio_pago'),
+    WHATSAPP_SUBSCRIPTION_TEMPLATE: z.string().default('recordatorio_suscripcion'),
+
+    // Empresa: nombre y cuenta para las transferencias de la suscripción de cada residencial
+    COMPANY_NAME: z.string().default('Residencial Cloud'),
+    COMPANY_BANK_NAME: z.string().optional(),
+    COMPANY_BANK_CLABE: z.string().optional(),
+    COMPANY_BANK_HOLDER: z.string().optional(),
 
     // Pagos
     ECARTPAY_MODE: z.enum(['mock', 'live']).default('mock'),
@@ -75,6 +82,12 @@ export function loadConfig(env = process.env) {
   const c = parsed.data;
   return {
     ...c,
+    company: {
+      name: c.COMPANY_NAME,
+      bank: c.COMPANY_BANK_CLABE
+        ? { name: c.COMPANY_BANK_NAME || '', clabe: c.COMPANY_BANK_CLABE, holder: c.COMPANY_BANK_HOLDER || c.COMPANY_NAME }
+        : null,
+    },
     isProd: c.NODE_ENV === 'production',
     isTest: c.NODE_ENV === 'test',
     cookieSecure: c.COOKIE_SECURE ?? c.NODE_ENV === 'production',

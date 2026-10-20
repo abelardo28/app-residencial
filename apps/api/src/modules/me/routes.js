@@ -2,7 +2,7 @@
 import { sessionView } from '../auth/routes.js';
 
 export default async function meRoutes(app, { tenantService, platformService }) {
-  app.get('/snapshot', { preHandler: app.authenticate }, async (req, reply) => {
+  app.get('/snapshot', { preHandler: app.authenticate, config: { allowSuspended: true } }, async (req, reply) => {
     const acc = req.account;
     reply.header('Cache-Control', 'no-store');
     return {

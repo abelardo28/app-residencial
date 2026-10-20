@@ -85,7 +85,7 @@ export function createAuthService({ repos, templates, dispatch }) {
       }
       if (acc.status === 'suspended') throw new HttpError(403, 'Tu cuenta está suspendida. Contacta a tu administrador.', 'suspended');
       if (acc.status !== 'active') throw unauthorized(GENERIC_LOGIN_ERROR, 'invalid_credentials');
-      if (acc.scope === 'tenant') {
+      if (acc.scope === 'tenant' && acc.role !== 'admin') {
         const t = tenants.find(acc.tenantId);
         if (t?.status !== 'active')
           throw new HttpError(
@@ -202,10 +202,11 @@ export function createAuthService({ repos, templates, dispatch }) {
       const acc = accounts.findById(s.userId);
       if (!acc || acc.status !== 'active' || acc.sessionVersion !== s.sessionVersion)
         end('Tu sesión se cerró porque cambió el estado de tu cuenta.');
-      if (acc.scope === 'tenant' && tenants.find(acc.tenantId)?.status !== 'active')
-        end('El acceso a este residencial está suspendido. Contacta a la administración.');
+      // Con el residencial suspendido sólo el administrador conserva la sesión, limitada a pagar la suscripción.
+      const suspended = acc.scope === 'tenant' && tenants.find(acc.tenantId)?.status !== 'active';
+      if (suspended && acc.role !== 'admin') end('El acceso a este residencial está suspendido. Contacta a la administración.');
       if (touch && now - new Date(s.lastSeenAt).getTime() > 60e3) sessions.touch(tokenHash, new Date(now).toISOString());
-      return { session: { ...s, token }, account: acc };
+      return { session: { ...s, token, restricted: suspended }, account: acc };
     },
 
     logout(token, acc) {

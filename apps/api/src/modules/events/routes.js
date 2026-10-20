@@ -5,7 +5,7 @@ import { SESSION_COOKIE } from '../../plugins/auth.js';
 const HEARTBEAT_MS = 25_000;
 
 export default async function eventsRoutes(app, { events, authService }) {
-  app.get('/', { preHandler: app.authenticate }, (req, reply) => {
+  app.get('/', { preHandler: app.authenticate, config: { allowSuspended: true } }, (req, reply) => {
     const acc = req.account;
     const token = req.cookies[SESSION_COOKIE];
     const channel = acc.scope === 'platform' ? 'platform' : acc.tenantId;
