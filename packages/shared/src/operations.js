@@ -8,7 +8,7 @@
 // Los campos que no debe decidir el cliente (ids, autor, estado, fechas) siempre se escriben después del input.
 import { uid, nowIso, shortCode, numericCode, money, monthLabel, fmtTime } from './format.js';
 import { buildToken, evaluatePass, parseInput, normalizePlate, PASS_TYPES } from './access.js';
-import { payableMonths } from './ledger.js';
+import { debtRestriction, payableRows, unitByReference } from './ledger.js';
 import { DomainError, forbidden } from './tx.js';
 
 const RESIDENT = ['resident'];
@@ -16,6 +16,25 @@ const GUARD = ['guard'];
 const ADMIN = ['admin'];
 const STAFF = ['guard', 'admin'];
 const ALL = ['resident', 'guard', 'admin'];
+
+/** Filas pagables de los meses pedidos, o error si alguno ya está pagado o en revisión. */
+function rowsFor(t, unitId, periods) {
+  const rows = new Map(payableRows(t.next, unitId).map((r) => [r.month, r]));
+  const list = [...new Set(periods)];
+  if (!list.length || list.some((p) => !rows.has(p)))
+    throw new DomainError('Alguno de los meses ya está pagado o en revisión.', 409, 'period_unavailable');
+  return list.sort().map((p) => rows.get(p));
+}
+const paymentOf = (row, data) => ({
+  id: uid('pay_'),
+  concept: row.lateFee ? 'Cuota de mantenimiento + recargo' : 'Cuota de mantenimiento',
+  period: row.month,
+  amount: row.amount,
+  lateFee: row.lateFee,
+  createdAt: nowIso(),
+  ...data,
+});
+const bankMovements = (t) => t.next.bankMovements || (t.next.bankMovements = []);
 
 const pick = (obj, keys) => Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
@@ -46,6 +65,10 @@ export const OPERATIONS = {
     roles: RESIDENT,
     run(t, { user, sign }, input) {
       if (new Date(input.validTo) <= new Date(input.validFrom)) throw new DomainError('La vigencia debe terminar después de iniciar.');
+      if (input.mode && input.mode !== 'single') {
+        const blocked = debtRestriction(t.next, user.unitId, 'recurrentPasses');
+        if (blocked) throw new DomainError(blocked, 403, 'debt_restricted');
+      }
       const pass = {
         maxUses: 1,
         days: [],
@@ -188,34 +211,31 @@ export const OPERATIONS = {
   submitPayment: {
     roles: RESIDENT,
     run(t, { user, trusted }, { periods, method, receipt, reference, ecartpayId, notes }) {
-      const allowed = payableMonths(t.next, user.unitId);
-      const list = [...new Set(periods)];
-      if (!list.length || list.some((p) => !allowed.includes(p)))
-        throw new DomainError('Alguno de los meses ya está pagado o en revisión.', 409, 'period_unavailable');
-      // Un pago con Ecart Pay sólo se aprueba si el servidor confirmó el cobro con el proveedor.
+      const rows = rowsFor(t, user.unitId, periods);
+      const list = rows.map((r) => r.month);
+      const total = rows.reduce((sum, r) => sum + r.amount, 0);
+      // Un pago con Ecart Pay sólo se aprueba si el servidor confirmó el cobro (y su monto) con el proveedor.
       const verified = method === 'ecartpay';
-      if (verified && trusted?.ecartpay?.id !== ecartpayId)
+      if (
+        verified &&
+        (trusted?.ecartpay?.id !== ecartpayId || (trusted.ecartpay.amount !== undefined && trusted.ecartpay.amount !== total))
+      )
         throw new DomainError('No pudimos confirmar el pago con Ecart Pay.', 402, 'payment_unverified');
       if (method === 'transfer' && !receipt) throw new DomainError('Adjunta el comprobante de la transferencia.');
-      const fee = t.next.settings.monthlyFee;
       const now = nowIso();
-      const created = list.map((period) => ({
-        id: uid('pay_'),
-        residentId: user.id,
-        unitId: user.unitId,
-        concept: 'Cuota de mantenimiento',
-        period,
-        amount: fee,
-        method,
-        status: verified ? 'approved' : 'pending',
-        reference: reference || '',
-        ecartpayId: ecartpayId || null,
-        receipt: receipt || null,
-        notes: notes || '',
-        createdAt: now,
-        ...(verified ? { reviewedBy: 'ecartpay', reviewedAt: now } : {}),
-      }));
-      const total = fee * list.length;
+      const created = rows.map((row) =>
+        paymentOf(row, {
+          residentId: user.id,
+          unitId: user.unitId,
+          method,
+          status: verified ? 'approved' : 'pending',
+          reference: reference || '',
+          ecartpayId: ecartpayId || null,
+          receipt: receipt || null,
+          notes: notes || '',
+          ...(verified ? { reviewedBy: 'ecartpay', reviewedAt: now } : {}),
+        }),
+      );
       const names = list.map(monthLabel).join(', ');
       created.forEach((p) => t.add('payments', p));
       const unit = t.unitLabel(user.unitId);
@@ -271,25 +291,21 @@ export const OPERATIONS = {
     run(t, { user }, { residentId, periods, reference }) {
       const r = t.must('users', residentId, 'El residente');
       if (r.role !== 'resident') throw new DomainError('Sólo se registran pagos de residentes.');
-      const allowed = payableMonths(t.next, r.unitId);
-      if (periods.some((p) => !allowed.includes(p)))
-        throw new DomainError('Alguno de los meses ya está pagado o en revisión.', 409, 'period_unavailable');
+      const rows = rowsFor(t, r.unitId, periods);
       const now = nowIso();
-      periods.forEach((period) =>
-        t.add('payments', {
-          id: uid('pay_'),
-          residentId,
-          unitId: r.unitId,
-          concept: 'Cuota de mantenimiento',
-          period,
-          amount: t.next.settings.monthlyFee,
-          method: 'cash',
-          status: 'approved',
-          reference: reference || 'Recibo de caja',
-          createdAt: now,
-          reviewedBy: user.id,
-          reviewedAt: now,
-        }),
+      rows.forEach((row) =>
+        t.add(
+          'payments',
+          paymentOf(row, {
+            residentId,
+            unitId: r.unitId,
+            method: 'cash',
+            status: 'approved',
+            reference: reference || 'Recibo de caja',
+            reviewedBy: user.id,
+            reviewedAt: now,
+          }),
+        ),
       );
       t.notify([residentId], {
         title: 'Pago en efectivo registrado',
@@ -311,6 +327,161 @@ export const OPERATIONS = {
         link: '/pagos',
       });
       return { sent: valid.length };
+    },
+  },
+
+  // ---------- Cobranza ----------
+  // Condona el recargo de un mes vencido (la cuota se sigue debiendo).
+  waiveLateFee: {
+    roles: ADMIN,
+    run(t, _ctx, { unitId, period }) {
+      const unit = t.must('units', unitId, 'La casa');
+      if (!(unit.waivedLateFees || []).includes(period))
+        t.patch('units', unitId, { waivedLateFees: [...(unit.waivedLateFees || []), period] });
+      t.audit({ action: 'Recargo condonado', target: `${unit.label} · ${monthLabel(period)}` });
+    },
+  },
+
+  /**
+   * Concilia los depósitos de un estado de cuenta. Por cada depósito:
+   *  1. busca la casa por su referencia de 7 dígitos;
+   *  2. si la casa subió comprobantes en revisión por el mismo monto, los aprueba;
+   *  3. si no, aplica el depósito a los meses más antiguos que debe cuando el monto coincide exacto;
+   *  4. lo demás queda "por asignar" para que administración decida.
+   * Los depósitos ya importados se reconocen por su id y no se vuelven a aplicar.
+   */
+  reconcileBank: {
+    roles: ADMIN,
+    run(t, { user }, { movements }) {
+      const known = new Set(bankMovements(t).map((m) => m.id));
+      const summary = { matched: 0, unmatched: 0, duplicates: 0, total: 0 };
+      const now = nowIso();
+      for (const mv of movements) {
+        if (known.has(mv.id)) {
+          summary.duplicates++;
+          continue;
+        }
+        known.add(mv.id);
+        const record = { ...mv, importedAt: now, importedBy: user.id, status: 'unmatched', unitId: null, paymentIds: [], reason: '' };
+        const unit = unitByReference(t.next, mv.reference);
+        if (!unit) {
+          record.reason = mv.reference ? 'La referencia no corresponde a ninguna casa' : 'El depósito no trae referencia';
+        } else {
+          record.unitId = unit.id;
+          const pending = t.next.payments.filter((p) => p.unitId === unit.id && p.status === 'pending');
+          const pendingTotal = pending.reduce((s, p) => s + p.amount, 0);
+          if (pending.length && pendingTotal === mv.amount) {
+            pending.forEach((p) =>
+              t.patch('payments', p.id, { status: 'approved', reviewedBy: 'conciliacion', reviewedAt: now, bankMovementId: mv.id }),
+            );
+            record.paymentIds = pending.map((p) => p.id);
+          } else {
+            const owed = payableRows(t.next, unit.id);
+            const take = [];
+            let sum = 0;
+            for (const row of owed) {
+              if (sum + row.amount > mv.amount) break;
+              take.push(row);
+              sum += row.amount;
+            }
+            if (take.length && sum === mv.amount) {
+              const residentId = t.next.users.find((u) => u.role === 'resident' && u.unitId === unit.id)?.id || null;
+              for (const row of take) {
+                const p = paymentOf(row, {
+                  residentId,
+                  unitId: unit.id,
+                  method: 'transfer',
+                  status: 'approved',
+                  reference: mv.reference,
+                  notes: mv.description,
+                  reviewedBy: 'conciliacion',
+                  reviewedAt: now,
+                  bankMovementId: mv.id,
+                });
+                t.add('payments', p);
+                record.paymentIds.push(p.id);
+              }
+            } else {
+              record.reason = owed.length
+                ? `El monto no coincide con lo que debe la casa (${money(owed.reduce((s, r) => s + r.amount, 0))})`
+                : 'La casa no tiene adeudo';
+            }
+          }
+          if (record.paymentIds.length) {
+            record.status = 'matched';
+            const periods = t.next.payments.filter((p) => record.paymentIds.includes(p.id)).map((p) => monthLabel(p.period));
+            t.notify(t.unitResidents(unit.id), {
+              title: 'Recibimos tu transferencia',
+              body: `Se aplicó tu depósito de ${money(mv.amount)} a ${periods.join(', ')}.`,
+              kind: 'payment',
+              link: '/pagos',
+            });
+          }
+        }
+        if (record.status === 'matched') {
+          summary.matched++;
+          summary.total += mv.amount;
+        } else summary.unmatched++;
+        t.add('bankMovements', record);
+      }
+      t.audit({
+        action: 'Estado de cuenta conciliado',
+        target: `${summary.matched} aplicados · ${summary.unmatched} por asignar · ${summary.duplicates} repetidos`,
+      });
+      return summary;
+    },
+  },
+  // Administración aplica a mano un depósito que la conciliación no pudo asignar.
+  assignBankMovement: {
+    roles: ADMIN,
+    run(t, { user }, { id, unitId, periods }) {
+      const mv = t.must('bankMovements', id, 'El depósito');
+      if (mv.status !== 'unmatched') throw new DomainError('Este depósito ya se procesó.', 409, 'already_processed');
+      const unit = t.must('units', unitId, 'La casa');
+      const rows = rowsFor(t, unitId, periods);
+      const total = rows.reduce((sum, r) => sum + r.amount, 0);
+      if (total > mv.amount)
+        throw new DomainError(`Los meses elegidos suman ${money(total)} y el depósito es de ${money(mv.amount)}.`, 409, 'amount_exceeded');
+      const now = nowIso();
+      const residentId = t.next.users.find((u) => u.role === 'resident' && u.unitId === unitId)?.id || null;
+      const created = rows.map((row) =>
+        paymentOf(row, {
+          residentId,
+          unitId,
+          method: 'transfer',
+          status: 'approved',
+          reference: mv.reference,
+          notes: mv.description,
+          reviewedBy: user.id,
+          reviewedAt: now,
+          bankMovementId: id,
+        }),
+      );
+      created.forEach((p) => t.add('payments', p));
+      t.patch('bankMovements', id, {
+        status: 'matched',
+        unitId,
+        paymentIds: created.map((p) => p.id),
+        reason: '',
+        assignedBy: user.id,
+        surplus: mv.amount - total, // saldo a favor de la casa, por aclarar
+      });
+      t.notify(t.unitResidents(unitId), {
+        title: 'Recibimos tu transferencia',
+        body: `Se aplicó tu depósito de ${money(mv.amount)} a ${rows.map((r) => monthLabel(r.month)).join(', ')}.`,
+        kind: 'payment',
+        link: '/pagos',
+      });
+      t.audit({ action: 'Depósito asignado manualmente', target: `${unit.label} · ${money(mv.amount)}` });
+    },
+  },
+  ignoreBankMovement: {
+    roles: ADMIN,
+    run(t, { user }, { id }) {
+      const mv = t.must('bankMovements', id, 'El depósito');
+      if (mv.status !== 'unmatched') throw new DomainError('Este depósito ya se procesó.', 409, 'already_processed');
+      t.patch('bankMovements', id, { status: 'ignored', ignoredBy: user.id });
+      t.audit({ action: 'Depósito descartado', target: `${mv.date} · ${money(mv.amount)}` });
     },
   },
 
@@ -371,6 +542,8 @@ export const OPERATIONS = {
   createReservation: {
     roles: RESIDENT,
     run(t, { user }, input) {
+      const blocked = debtRestriction(t.next, user.unitId, 'reservations');
+      if (blocked) throw new DomainError(blocked, 403, 'debt_restricted');
       const am = t.next.settings.amenities.find((a) => a.id === input.amenityId);
       if (!am) throw new DomainError('Elige un área válida.');
       if (input.from >= input.to) throw new DomainError('La hora de fin debe ser posterior al inicio.');
@@ -558,7 +731,18 @@ export const OPERATIONS = {
     run(t, _ctx, data) {
       t.next.settings = {
         ...t.next.settings,
-        ...pick(data, ['name', 'monthlyFee', 'dueDay', 'lateFee', 'bank', 'amenities', 'generalProviders', 'cover']),
+        ...pick(data, [
+          'name',
+          'monthlyFee',
+          'dueDay',
+          'lateFee',
+          'lateFeeGraceDays',
+          'restrictions',
+          'bank',
+          'amenities',
+          'generalProviders',
+          'cover',
+        ]),
       };
       if (data.cover === '') delete t.next.settings.cover; // '' = volver a la foto de ejemplo
       t.audit({ action: 'Configuración actualizada', target: Object.keys(data).join(', ') });

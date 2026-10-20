@@ -15,6 +15,7 @@ export const COLLECTIONS = [
   'polls',
   'expenses',
   'sos',
+  'bankMovements',
 ];
 
 const toTenant = (r) =>

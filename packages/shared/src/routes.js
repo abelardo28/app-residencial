@@ -23,6 +23,10 @@ export const OPERATION_ROUTES = {
   reviewPayment: { method: 'POST', path: '/payments/:id/review', args: (id, status, note) => ({ id, status, note }) },
   registerCashPayment: { method: 'POST', path: '/payments/cash', args: same },
   sendReminder: { method: 'POST', path: '/payments/reminders', args: one('residentIds') },
+  waiveLateFee: { method: 'POST', path: '/units/:unitId/late-fees/waive', args: (unitId, period) => ({ unitId, period }) },
+  reconcileBank: { method: 'POST', path: '/bank/reconcile', args: one('movements') },
+  assignBankMovement: { method: 'POST', path: '/bank/movements/:id/assign', args: (id, unitId, periods) => ({ id, unitId, periods }) },
+  ignoreBankMovement: { method: 'POST', path: '/bank/movements/:id/ignore', args: one('id') },
 
   createNotice: { method: 'POST', path: '/notices', args: same },
   deleteNotice: { method: 'DELETE', path: '/notices/:id', args: one('id') },

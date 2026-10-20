@@ -270,6 +270,8 @@ export function seedTenant({ sign }) {
     monthlyFee: fee,
     dueDay: 10,
     lateFee: 150,
+    lateFeeGraceDays: 0,
+    restrictions: { enabled: true, minMonths: 2, reservations: true, recurrentPasses: true },
     bank: { name: 'BBVA', clabe: '012 180 0011 2233 4455', holder: 'Asociación de Colonos Las Palmas A.C.' },
     amenities: [
       { id: 'am1', name: 'Casa club', capacity: 60, open: '09:00', close: '22:00', deposit: 1000 },
@@ -384,6 +386,7 @@ export function seedTenant({ sign }) {
     polls,
     expenses,
     sos: [],
+    bankMovements: [],
   };
 }
 
@@ -419,6 +422,7 @@ export function seedSecondTenant() {
     polls: [],
     expenses: [],
     sos: [],
+    bankMovements: [],
   };
 }
 

@@ -32,7 +32,7 @@ export default function ResidentHome() {
 
       {rows.some((r) => r.state === 'overdue') && (
         <Link to="/pagos" className="banner bad" style={{ marginBottom: 16, textDecoration: 'none' }}>
-          <Wallet size={18} /> Tienes {owed.length} cuota(s) pendiente(s) por {money(owed.length * db.settings.monthlyFee)}.{' '}
+          <Wallet size={18} /> Tienes {owed.length} cuota(s) pendiente(s) por {money(owed.reduce((s, r) => s + r.amount, 0))}.{' '}
           <b style={{ marginLeft: 'auto' }}>Pagar ahora</b>
         </Link>
       )}
@@ -61,7 +61,7 @@ export default function ResidentHome() {
           <Stat
             icon={<Wallet size={15} />}
             label="Saldo"
-            value={money(owed.length * db.settings.monthlyFee)}
+            value={money(owed.reduce((s, r) => s + r.amount, 0))}
             sub={owed.length ? owed.map((o) => monthLabel(o.month)).join(', ') : 'Al corriente'}
           />
         </Link>

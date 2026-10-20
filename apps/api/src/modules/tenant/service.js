@@ -1,7 +1,7 @@
 // Operaciones del residencial y la vista de datos de cada usuario.
 // Las reglas viven en @residencial/shared; aquí sólo se cargan los datos, se ejecuta la operación
 // dentro de una transacción y se guardan los cambios, la auditoría y los mensajes.
-import { createTx, money, monthLabel, payableMonths, runOperation, viewFor } from '@residencial/shared';
+import { amountDue, createTx, money, monthLabel, payableMonths, runOperation, viewFor } from '@residencial/shared';
 import { transaction } from '../../db/database.js';
 import { passSigner } from '../../lib/crypto.js';
 import { HttpError, badRequest, forbidden, notFound } from '../../lib/errors.js';
@@ -71,12 +71,16 @@ export function createTenantService({ repos, config, dispatch, events, ecartpay 
     async createCheckout(acc, { periods }) {
       if (acc.role !== 'resident') throw forbidden();
       const unitId = acc.profile.unitId;
-      const data = { settings: tenants.find(acc.tenantId).settings, payments: tenants.listRecords(acc.tenantId, 'payments') };
+      const data = {
+        settings: tenants.find(acc.tenantId).settings,
+        units: tenants.listRecords(acc.tenantId, 'units'),
+        payments: tenants.listRecords(acc.tenantId, 'payments'),
+      };
       const list = [...new Set(periods)];
       const allowed = payableMonths(data, unitId);
       if (!list.length || list.some((p) => !allowed.includes(p)))
         throw new HttpError(409, 'Alguno de los meses ya está pagado o en revisión.', 'period_unavailable');
-      const amount = data.settings.monthlyFee * list.length;
+      const amount = amountDue(data, unitId, list); // cuota + recargos
       const concept = `Mantenimiento ${list.map(monthLabel).join(', ')}`;
       const checkout = await ecartpay.createCheckout({ amount, concept, email: acc.email, reference: `${acc.tenantId}:${unitId}` });
       platform.createCheckout({

@@ -80,6 +80,18 @@ La cámara (escáner QR y foto de placa) sólo funciona en `localhost` o con HTT
 - Los administradores reciben un aviso por cada comprobante. Al **aprobar o rechazar** (con motivo), el residente recibe la notificación.
 - Morosidad por casa, recordatorios de pago individuales o masivos, y métricas de cobranza.
 
+### Cobranza automática
+
+- **Referencia SPEI por casa**: cada casa tiene una referencia numérica de 7 dígitos con dígito verificador (`1` + número de casa + verificador). El residente la ve en _Pagos_ con botón para copiarla y la escribe en el campo «Referencia numérica» de su transferencia.
+- **Conciliación bancaria**: en _Pagos → Conciliación_ administración sube el estado de cuenta en CSV (BBVA, Banorte, Santander y otros: las columnas se reconocen por nombre). Por cada abono:
+  1. si la casa tiene comprobantes en revisión por el mismo monto, se aprueban;
+  2. si no, el depósito se aplica a los meses más antiguos que debe cuando el monto coincide exacto;
+  3. lo demás queda _por asignar_ para aplicarlo a mano o descartarlo.
+     Subir el mismo archivo otra vez no duplica pagos. Hay un botón para descargar un CSV de ejemplo con los adeudos de la demo.
+- **Recargos**: monto fijo por mes vencido con días de tolerancia configurables. Administración puede **condonar** el recargo de un mes (queda en la auditoría).
+- **Restricción por adeudo** (opcional, según el reglamento): con N meses vencidos la casa no puede reservar áreas comunes ni crear pases recurrentes. El acceso a la vivienda y los pases de una sola visita nunca se bloquean.
+- Las reglas están en `packages/shared/src/ledger.js` (estado de cuenta, recargos, referencias), `bank.js` (lectura del CSV) y las operaciones `reconcileBank`, `assignBankMovement`, `ignoreBankMovement` y `waiveLateFee`.
+
 ### Avisos y notificaciones
 
 - Avisos por tipo: general, reunión, documento, bitácora, mantenimiento o urgente, con **archivos adjuntos**.

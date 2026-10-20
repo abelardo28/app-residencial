@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Plus, QrCode, Share2, Download, Ban, Clock, Repeat, Car } from 'lucide-react';
 import { useStore } from '../data/store';
+import { debtRestriction } from '@residencial/shared';
 import { PASS_TYPES, passStatus } from '@residencial/shared';
 import { DAYS, fmtDateTime, toLocalInput, fmtTime } from '../lib/utils';
 import { Badge, Button, Card, Chips, Empty, Field, Modal, PageHead, Tabs } from '../components/ui';
@@ -32,6 +33,7 @@ export default function Passes() {
   const active = mine.filter((p) => ['Activo', 'Programado'].includes(passStatus(p).label));
   const history = mine.filter((p) => !active.includes(p));
   const list = tab === 'active' ? active : history;
+  const limited = debtRestriction(db, me.unitId, 'recurrentPasses');
 
   return (
     <>
@@ -44,6 +46,11 @@ export default function Passes() {
           <Plus size={16} /> Nuevo pase
         </Button>
       </PageHead>
+      {limited && (
+        <div className="banner warn" style={{ marginBottom: 16 }}>
+          {limited} Puedes seguir creando pases de una sola visita.
+        </div>
+      )}
       <div style={{ marginBottom: 16 }}>
         <Tabs
           value={tab}

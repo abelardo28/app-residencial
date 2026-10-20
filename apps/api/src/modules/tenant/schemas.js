@@ -75,6 +75,24 @@ export const OPERATION_SCHEMAS = {
   registerCashPayment: z.object({ residentId: id, periods: z.array(period).min(1).max(24), reference: text(80).optional() }),
   sendReminder: z.object({ residentIds: z.array(id).min(1).max(2000) }),
 
+  waiveLateFee: z.object({ unitId: id, period }),
+  reconcileBank: z.object({
+    movements: z
+      .array(
+        z.object({
+          id: z.string().regex(/^bm_[a-z0-9]{1,16}$/),
+          date: text(20),
+          amount: z.number().positive().max(10_000_000),
+          reference: text(40),
+          description: text(200),
+        }),
+      )
+      .min(1)
+      .max(1000),
+  }),
+  assignBankMovement: z.object({ id, unitId: id, periods: z.array(period).min(1).max(24) }),
+  ignoreBankMovement: byId,
+
   createNotice: z.object({
     title: requiredText(140),
     category: z.enum(['general', 'reunion', 'documento', 'bitacora', 'mantenimiento', 'urgente']),
@@ -143,6 +161,15 @@ export const OPERATION_SCHEMAS = {
     monthlyFee: money.optional(),
     dueDay: z.number().int().min(1).max(28).optional(),
     lateFee: money.optional(),
+    lateFeeGraceDays: z.number().int().min(0).max(28).optional(),
+    restrictions: z
+      .object({
+        enabled: z.boolean(),
+        minMonths: z.number().int().min(1).max(12),
+        reservations: z.boolean(),
+        recurrentPasses: z.boolean(),
+      })
+      .optional(),
     bank: z.object({ name: text(80), clabe: text(40), holder: text(120) }).optional(),
     amenities: z
       .array(

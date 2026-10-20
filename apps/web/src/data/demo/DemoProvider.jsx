@@ -51,12 +51,18 @@ const COLLECTIONS = [
   'sos',
 ];
 const validTenant = (t) => t?.settings && COLLECTIONS.every((c) => Array.isArray(t[c]));
+// Colecciones agregadas después: los datos guardados en versiones anteriores las reciben vacías.
+const LATER_COLLECTIONS = ['bankMovements'];
+const upgrade = (data) => {
+  for (const t of Object.values(data.tenants)) for (const c of LATER_COLLECTIONS) t[c] = Array.isArray(t[c]) ? t[c] : [];
+  return data;
+};
 function load() {
   try {
     const raw = safe.get('localStorage', KEY);
     if (raw) {
       const data = JSON.parse(raw);
-      if (data?.version === 2 && data.platform?.staff && Object.values(data.tenants || {}).every(validTenant)) return data;
+      if (data?.version === 2 && data.platform?.staff && Object.values(data.tenants || {}).every(validTenant)) return upgrade(data);
     }
   } catch {
     /* datos corruptos: se regenera la demo */

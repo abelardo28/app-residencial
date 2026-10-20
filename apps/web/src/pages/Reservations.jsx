@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CalendarDays, Plus, Users } from 'lucide-react';
 import { useStore, unitLabel, userName } from '../data/store';
 import { money } from '../lib/utils';
+import { debtRestriction } from '@residencial/shared';
 import { Badge, Button, Card, CardHead, Chips, Empty, Field, Modal, PageHead } from '../components/ui';
 
 export default function Reservations() {
@@ -12,6 +13,7 @@ export default function Reservations() {
     .filter((r) => r.status === 'approved' && r.date >= today)
     .sort((a, b) => (a.date + a.from).localeCompare(b.date + b.from));
   const mine = me.role === 'admin' ? upcoming : upcoming.filter((r) => r.unitId === me.unitId);
+  const blocked = me.role === 'resident' ? debtRestriction(db, me.unitId, 'reservations') : null;
 
   return (
     <>
@@ -19,6 +21,11 @@ export default function Reservations() {
         title={me.role === 'admin' ? 'Reservaciones' : 'Reservar áreas comunes'}
         subtitle="Consulta la disponibilidad y aparta en segundos, sin choques de horario."
       />
+      {blocked && (
+        <div className="banner warn" style={{ marginBottom: 16 }}>
+          {blocked}
+        </div>
+      )}
       <div className="grid g4" style={{ marginBottom: 16 }}>
         {db.settings.amenities.map((a) => (
           <Card key={a.id} className="stack" style={{ gap: 6 }}>
@@ -29,7 +36,7 @@ export default function Reservations() {
             <div className="faint">{a.deposit ? `Depósito ${money(a.deposit)}` : 'Sin depósito'}</div>
             <div className="faint">{upcoming.filter((r) => r.amenityId === a.id).length} reservación(es) próximas</div>
             {me.role === 'resident' && (
-              <Button size="sm" onClick={() => setCreating(a.id)}>
+              <Button size="sm" disabled={!!blocked} onClick={() => setCreating(a.id)}>
                 <Plus size={14} /> Reservar
               </Button>
             )}

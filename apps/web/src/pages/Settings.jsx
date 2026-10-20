@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { billingSettings } from '@residencial/shared';
 import { useStore } from '../data/store';
 import { money, monthLabel, fmtDate } from '../lib/utils';
 import { invoiceState } from './portal/Portal';
@@ -16,7 +17,11 @@ export default function SettingsPage() {
     .slice(0, 6);
   const INV = { paid: ['Pagado', 'ok'], pending: ['Pendiente', 'warn'], overdue: ['Vencido', 'bad'] };
   const s = db.settings;
+  const billing = billingSettings(s);
   const [f, setF] = useState({
+    lateFee: billing.lateFee,
+    graceDays: billing.lateFeeGraceDays,
+    ...billing.restrictions,
     name: s.name,
     monthlyFee: s.monthlyFee,
     dueDay: s.dueDay,
@@ -26,6 +31,7 @@ export default function SettingsPage() {
     providers: s.generalProviders.join(', '),
   });
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const toggle = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.checked }));
 
   function save() {
     actions
@@ -33,6 +39,14 @@ export default function SettingsPage() {
         name: f.name,
         monthlyFee: Number(f.monthlyFee),
         dueDay: Number(f.dueDay),
+        lateFee: Number(f.lateFee) || 0,
+        lateFeeGraceDays: Number(f.graceDays) || 0,
+        restrictions: {
+          enabled: f.enabled,
+          minMonths: Math.max(1, Number(f.minMonths) || 1),
+          reservations: f.reservations,
+          recurrentPasses: f.recurrentPasses,
+        },
         bank: { name: f.bankName, clabe: f.clabe, holder: f.holder },
         generalProviders: f.providers
           .split(',')
@@ -84,6 +98,37 @@ export default function SettingsPage() {
             <Field label="Titular">
               <input className="input" value={f.holder} onChange={set('holder')} />
             </Field>
+          </div>
+        </Card>
+        <Card>
+          <CardHead title="Recargos y restricciones" subtitle="Aplícalos sólo si están aprobados en el reglamento o la asamblea." />
+          <div className="stack">
+            <div className="grid g2">
+              <Field label="Recargo por mes vencido (MXN)" hint="0 = sin recargo">
+                <input type="number" min={0} className="input" value={f.lateFee} onChange={set('lateFee')} />
+              </Field>
+              <Field label="Días de tolerancia" hint="Después del día de vencimiento">
+                <input type="number" min={0} max={28} className="input" value={f.graceDays} onChange={set('graceDays')} />
+              </Field>
+            </div>
+            <label className="row" style={{ gap: 8 }}>
+              <input type="checkbox" checked={f.enabled} onChange={toggle('enabled')} /> Restringir servicios por adeudo
+            </label>
+            {f.enabled && (
+              <>
+                <Field label="A partir de cuántos meses vencidos">
+                  <input type="number" min={1} max={12} className="input" value={f.minMonths} onChange={set('minMonths')} />
+                </Field>
+                <label className="row" style={{ gap: 8 }}>
+                  <input type="checkbox" checked={f.reservations} onChange={toggle('reservations')} /> Reservar áreas comunes
+                </label>
+                <label className="row" style={{ gap: 8 }}>
+                  <input type="checkbox" checked={f.recurrentPasses} onChange={toggle('recurrentPasses')} /> Pases recurrentes o de varias
+                  entradas
+                </label>
+              </>
+            )}
+            <p className="faint">El acceso a la vivienda y los pases de una sola visita nunca se bloquean.</p>
           </div>
         </Card>
         <Card>

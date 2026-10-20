@@ -50,6 +50,7 @@ const forResident = (tenant, me) => {
     })),
     expenses: tenant.expenses,
     sos: tenant.sos.filter((s) => s.residentId === me.id),
+    bankMovements: [],
   };
 };
 
@@ -70,6 +71,7 @@ const forGuard = (tenant, me) => ({
   polls: [],
   expenses: [],
   sos: tenant.sos,
+  bankMovements: [],
 });
 
 const forAdmin = (tenant, me) => ({ ...tenant, notifications: tenant.notifications.filter((n) => n.userId === me.id) });

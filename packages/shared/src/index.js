@@ -3,6 +3,7 @@ export * from './format.js';
 export * from './validation.js';
 export * from './access.js';
 export * from './ledger.js';
+export * from './bank.js';
 export * from './tx.js';
 export * from './operations.js';
 export * from './routes.js';
