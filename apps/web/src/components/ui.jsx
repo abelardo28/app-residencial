@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Upload, FileText, Download } from 'lucide-react';
 
 export const Card = ({ className = '', children, ...p }) => (
@@ -56,6 +57,12 @@ export function Field({ label, children, hint }) {
   );
 }
 
+/**
+ * Muestra el contenido directo en <body>. Los paneles y ventanas se abren desde la barra superior, que usa
+ * backdrop-filter; dentro de ella un elemento fijo queda atrapado en la barra y pierde su fondo translúcido.
+ */
+export const Portal = ({ children }) => createPortal(children, document.body);
+
 export function Modal({ title, onClose, children, wide, footer }) {
   // En celular la ventana es una hoja inferior que se cierra deslizándola hacia abajo.
   const [drag, setDrag] = useState(0);
@@ -75,27 +82,29 @@ export function Modal({ title, onClose, children, wide, footer }) {
     setDrag(0);
   };
   return (
-    <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div
-        ref={sheetRef}
-        className={`modal ${wide ? 'wide' : ''}`}
-        role="dialog"
-        aria-label={title}
-        style={drag ? { transform: `translateY(${drag}px)`, transition: 'none' } : { transition: 'transform .2s' }}
-      >
-        <div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-          <div className="sheet-handle" />
-          <div className="row between" style={{ marginBottom: 16, flexWrap: 'nowrap' }}>
-            <h2>{title}</h2>
-            <button className="btn ghost icon-btn" onClick={onClose} aria-label="Cerrar">
-              <X size={18} />
-            </button>
+    <Portal>
+      <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+        <div
+          ref={sheetRef}
+          className={`modal ${wide ? 'wide' : ''}`}
+          role="dialog"
+          aria-label={title}
+          style={drag ? { transform: `translateY(${drag}px)`, transition: 'none' } : { transition: 'transform .2s' }}
+        >
+          <div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+            <div className="sheet-handle" />
+            <div className="row between" style={{ marginBottom: 16, flexWrap: 'nowrap' }}>
+              <h2>{title}</h2>
+              <button className="btn ghost icon-btn" onClick={onClose} aria-label="Cerrar">
+                <X size={18} />
+              </button>
+            </div>
           </div>
+          {children}
+          {footer && <div className="modal-footer">{footer}</div>}
         </div>
-        {children}
-        {footer && <div className="modal-footer">{footer}</div>}
       </div>
-    </div>
+    </Portal>
   );
 }
 

@@ -4,7 +4,7 @@ import { X, Wallet, DoorOpen, Megaphone, Package, Siren, Truck, AlertTriangle, W
 import { useStore } from '../data/store';
 import { timeAgo } from '../lib/utils';
 import { pushPermission, pushSupported, requestPush } from '../services/push';
-import { Button, Empty } from './ui';
+import { Button, Empty, Portal } from './ui';
 
 const ICONS = {
   payment: Wallet,
@@ -26,7 +26,7 @@ export default function NotificationsPanel({ onClose }) {
   const list = db.notifications.filter((n) => n.userId === me.id);
 
   return (
-    <>
+    <Portal>
       <div className="backdrop" style={{ background: 'rgba(20,18,16,.18)' }} onClick={onClose} />
       <aside className="drawer">
         <div className="row between" style={{ padding: '16px 16px 8px' }}>
@@ -82,6 +82,6 @@ export default function NotificationsPanel({ onClose }) {
           })}
         </div>
       </aside>
-    </>
+    </Portal>
   );
 }

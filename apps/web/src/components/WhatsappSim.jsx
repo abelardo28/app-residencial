@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { MessageCircle, Send, X } from 'lucide-react';
+import { Portal } from './ui';
 import { useStore, SHOW_DEMO_HELP } from '../data/store';
 import { fmtTime } from '../lib/utils';
 
@@ -72,7 +73,7 @@ function WhatsappSim({ onClose }) {
 
   const contact = contacts.find((c) => c.phone === phone);
   return (
-    <>
+    <Portal>
       <div className="sidebar-overlay" style={{ display: 'block' }} onClick={onClose} />
       <aside className="drawer wa" role="dialog" aria-label="Simulador de WhatsApp">
         <div className="wa-head">
@@ -138,7 +139,7 @@ function WhatsappSim({ onClose }) {
           </button>
         </form>
       </aside>
-    </>
+    </Portal>
   );
 }
 

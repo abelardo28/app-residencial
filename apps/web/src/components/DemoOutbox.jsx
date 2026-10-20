@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Inbox, Mail, MessageCircle, X, Link2, KeyRound } from 'lucide-react';
+import { Portal } from './ui';
 import { useStore, SHOW_DEMO_HELP } from '../data/store';
 import { timeAgo } from '../lib/utils';
 
@@ -80,7 +81,7 @@ function DemoOutbox({ onClose }) {
   const list = (useOutbox(true) || []).filter((m) => filter === 'all' || m.channel === filter);
   const codeOf = (m) => m.meta?.code;
   return (
-    <>
+    <Portal>
       <div className="sidebar-overlay" style={{ display: 'block' }} onClick={onClose} />
       <aside className="drawer" role="dialog" aria-label="Buzón de prueba">
         <div className="row between" style={{ padding: '18px 16px 8px', flexWrap: 'nowrap' }}>
@@ -145,6 +146,6 @@ function DemoOutbox({ onClose }) {
           ))}
         </div>
       </aside>
-    </>
+    </Portal>
   );
 }
