@@ -3,7 +3,6 @@ import { Home, Building2, Eye, EyeOff, ShieldCheck, Lock, Mail, MessageCircle, C
 import { useStore, SHOW_DEMO_HELP } from '../../data/store';
 import { passwordIssues } from '@residencial/shared';
 import { DemoOutboxButton, takePendingActivation } from '../../components/DemoOutbox';
-import { WhatsappSimButton } from '../../components/WhatsappSim';
 
 // Lee un enlace de activación (#/activar?t=…&e=…) y lo borra de la barra de direcciones
 // para que el token no quede en el historial.
@@ -53,7 +52,6 @@ export default function Auth() {
   return (
     <div className={`auth ${portal ? 'portal' : ''}`}>
       <DemoOutboxButton floating />
-      <WhatsappSimButton floating />
       <div className="auth-card">
         <Side portal={portal} />
         <div className="auth-main">

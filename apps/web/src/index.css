@@ -201,7 +201,7 @@ textarea {
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   padding: 12px 28px;
   background: var(--surface);
   backdrop-filter: var(--blur);
@@ -1820,9 +1820,6 @@ button.list-item.clickable:hover {
 }
 
 /* Simulador de WhatsApp */
-.wa-fab {
-  right: 196px;
-}
 .drawer.wa {
   width: min(420px, 100%);
 }
@@ -1891,7 +1888,4 @@ button.list-item.clickable:hover {
   flex: 1;
 }
 @media (max-width: 760px) {
-  .wa-fab {
-    right: 70px;
-  }
 }

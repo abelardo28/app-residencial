@@ -9,23 +9,20 @@ import { fmtTime } from '../lib/utils';
 const QUICK = ['Hola', '1', '2', '3', '4'];
 const ROLE = { resident: 'Residente', guard: 'Vigilancia', admin: 'Administración' };
 
-export function WhatsappSimButton({ floating }) {
+export function WhatsappSimButton() {
   const { whatsapp } = useStore();
   const [open, setOpen] = useState(false);
   if (!SHOW_DEMO_HELP || !whatsapp) return null;
   return (
     <>
-      {!(floating && open) && (
-        <button
-          className={`btn ${floating ? 'outbox-fab wa-fab' : 'icon-btn'}`}
-          onClick={() => setOpen(true)}
-          aria-label="Simulador de WhatsApp"
-          title="Prueba el asistente de WhatsApp"
-        >
-          <MessageCircle size={18} />
-          {floating && <span>WhatsApp</span>}
-        </button>
-      )}
+      <button
+        className="btn icon-btn"
+        onClick={() => setOpen(true)}
+        aria-label="Simulador de WhatsApp"
+        title="Prueba el asistente de WhatsApp"
+      >
+        <MessageCircle size={18} />
+      </button>
       {open && <WhatsappSim onClose={() => setOpen(false)} />}
     </>
   );

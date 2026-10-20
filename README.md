@@ -103,7 +103,7 @@ Los residentes escriben «Hola» al WhatsApp del residencial y un asistente con 
 
 Administración recibe un resumen (comprobantes por revisar, depósitos por asignar, adeudo, reportes) y vigilancia el enlace a su app. La persona se identifica por el teléfono registrado en su cuenta; las acciones pasan por las mismas reglas que la app (por ejemplo, las restricciones por adeudo).
 
-En la demo y en desarrollo, el botón **WhatsApp** (pantalla de inicio y barra superior) abre un simulador: eliges a la persona y chateas como lo haría desde su teléfono.
+En la demo y en desarrollo, el botón de WhatsApp de la barra superior abre un simulador: eliges a la persona y chateas como lo haría desde su teléfono.
 
 **Para producción** (WhatsApp Cloud API de Meta):
 
