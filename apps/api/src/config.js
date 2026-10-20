@@ -33,6 +33,11 @@ const schema = z
     WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
     WHATSAPP_AUTH_TEMPLATE: z.string().default('codigo_verificacion'),
     WHATSAPP_TEMPLATE_LANG: z.string().default('es_MX'),
+    // Asistente y avisos por WhatsApp (webhook de Meta y plantillas de mensajes iniciados por el residencial)
+    WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+    WHATSAPP_APP_SECRET: z.string().optional(),
+    WHATSAPP_NOTICE_TEMPLATE: z.string().default('aviso_residencial'),
+    WHATSAPP_REMINDER_TEMPLATE: z.string().default('recordatorio_pago'),
 
     // Pagos
     ECARTPAY_MODE: z.enum(['mock', 'live']).default('mock'),
@@ -51,6 +56,8 @@ const schema = z
       required('RESEND_API_KEY', 'envío de correos');
       required('WHATSAPP_TOKEN', 'envío de WhatsApp');
       required('WHATSAPP_PHONE_NUMBER_ID', 'envío de WhatsApp');
+      required('WHATSAPP_APP_SECRET', 'validar los mensajes que llegan de WhatsApp');
+      required('WHATSAPP_VERIFY_TOKEN', 'registrar el webhook de WhatsApp');
     }
     if (c.ECARTPAY_MODE === 'live') {
       required('ECARTPAY_PRIVATE_KEY', 'cobros con Ecart Pay');

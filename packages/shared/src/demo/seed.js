@@ -271,6 +271,8 @@ export function seedTenant({ sign }) {
     dueDay: 10,
     lateFee: 150,
     lateFeeGraceDays: 0,
+    whatsapp: { enabled: true, notices: true, reminders: true, number: '+52 55 1234 0000' },
+    gate: { autoOpenOnPass: true, residentOpen: true, autoOpenResidentPlates: true },
     restrictions: { enabled: true, minMonths: 2, reservations: true, recurrentPasses: true },
     bank: { name: 'BBVA', clabe: '012 180 0011 2233 4455', holder: 'Asociación de Colonos Las Palmas A.C.' },
     amenities: [
@@ -387,6 +389,39 @@ export function seedTenant({ sign }) {
     expenses,
     sos: [],
     bankMovements: [],
+    ...seedGate(d),
+  };
+}
+
+/** Equipos de caseta de ejemplo: dos plumas, un lector de tags y una cámara de placas. */
+function seedGate(d) {
+  const device = (id, name, kind, lane, barrierId = null) => ({
+    id,
+    name,
+    kind,
+    lane,
+    barrierId,
+    version: 1,
+    status: 'active',
+    createdAt: d(-30),
+    connectedAt: d(-1),
+    disconnectedAt: null,
+  });
+  return {
+    devices: [
+      device('dv_pl1', 'Pluma de visitas', 'barrier', 'entrada'),
+      device('dv_pl2', 'Pluma de residentes', 'barrier', 'residentes'),
+      device('dv_rf1', 'Lector de tags', 'reader', 'residentes', 'dv_pl2'),
+      device('dv_cam1', 'Cámara de placas', 'camera', 'residentes', 'dv_pl2'),
+    ],
+    tags: [
+      { id: 'tg1', unitId: 'u3', code: 'A1B2C3D4', label: 'Auto Mazda', status: 'active', createdAt: d(-30) },
+      { id: 'tg2', unitId: 'u5', code: '0012345678', label: 'Camioneta', status: 'active', createdAt: d(-30) },
+      { id: 'tg3', unitId: 'u7', code: 'FF00AA11', label: 'Tag extraviado', status: 'blocked', createdAt: d(-60) },
+    ],
+    gateCommands: [],
+    gateEvents: [],
+    whatsappOptOuts: [],
   };
 }
 
@@ -423,6 +458,11 @@ export function seedSecondTenant() {
     expenses: [],
     sos: [],
     bankMovements: [],
+    devices: [],
+    tags: [],
+    gateCommands: [],
+    gateEvents: [],
+    whatsappOptOuts: [],
   };
 }
 

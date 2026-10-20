@@ -33,7 +33,9 @@ export async function seedDemo(repos, config) {
     for (const r of company.residencias) {
       const t = data[r.id];
       tenants.create({ ...r, settings: t.settings });
-      for (const c of COLLECTIONS) tenants.insertMany(r.id, c, t[c]);
+      // Con la API, los equipos de ejemplo aparecen desconectados hasta que se conecte un agente real
+      const devices = (t.devices || []).map((d) => ({ ...d, connectedAt: null, disconnectedAt: null }));
+      for (const c of COLLECTIONS) tenants.insertMany(r.id, c, c === 'devices' ? devices : t[c] || []);
       for (const u of t.users) {
         const pending = u.id === DEMO_INVITE.userId;
         accounts.create({

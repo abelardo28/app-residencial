@@ -2,6 +2,8 @@
 // La API aplica esta vista antes de responder: nadie recibe datos que su rol no necesita
 // (por ejemplo, un residente no recibe los pases, pagos ni datos de contacto de otras casas).
 
+const pickKeys = (obj, keys) => Object.fromEntries(keys.filter((k) => k in obj).map((k) => [k, obj[k]]));
+const DEVICE_PUBLIC = ['id', 'name', 'kind', 'lane', 'status', 'connectedAt', 'disconnectedAt'];
 const omit = (obj, keys) => Object.fromEntries(Object.entries(obj).filter(([k]) => !keys.includes(k)));
 
 /** Datos públicos de una persona para otros usuarios del residencial. */
@@ -51,6 +53,12 @@ const forResident = (tenant, me) => {
     expenses: tenant.expenses,
     sos: tenant.sos.filter((s) => s.residentId === me.id),
     bankMovements: [],
+    // Sólo las plumas, para el botón "Abrir pluma" cuando el residencial lo permite
+    devices: (tenant.devices || []).filter((d) => d.kind === 'barrier' && d.status === 'active').map((d) => pickKeys(d, DEVICE_PUBLIC)),
+    tags: (tenant.tags || []).filter(mine),
+    gateCommands: (tenant.gateCommands || []).filter((c) => c.by === me.id).slice(0, 5),
+    gateEvents: [],
+    whatsappOptOuts: (tenant.whatsappOptOuts || []).filter((o) => o.id === me.id),
   };
 };
 
@@ -72,6 +80,11 @@ const forGuard = (tenant, me) => ({
   expenses: [],
   sos: tenant.sos,
   bankMovements: [],
+  devices: (tenant.devices || []).map((d) => pickKeys(d, DEVICE_PUBLIC)),
+  tags: [],
+  gateCommands: (tenant.gateCommands || []).slice(0, 30),
+  gateEvents: (tenant.gateEvents || []).slice(0, 60),
+  whatsappOptOuts: (tenant.whatsappOptOuts || []).filter((o) => o.id === me.id),
 });
 
 const forAdmin = (tenant, me) => ({ ...tenant, notifications: tenant.notifications.filter((n) => n.userId === me.id) });

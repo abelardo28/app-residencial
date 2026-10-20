@@ -1,6 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { ScanLine, UserPlus, Truck, Users, CheckCircle2, XCircle, Siren, LogOut, Keyboard, AlertTriangle } from 'lucide-react';
-import { useStore, unitLabel } from '../data/store';
+import {
+  ScanLine,
+  UserPlus,
+  Truck,
+  Users,
+  CheckCircle2,
+  XCircle,
+  Siren,
+  LogOut,
+  Keyboard,
+  AlertTriangle,
+  WifiOff,
+  RefreshCw,
+} from 'lucide-react';
+import { useStore, unitLabel, SHOW_DEMO_HELP } from '../data/store';
+import { useOfflineGate } from '../lib/offlineGate';
+import GateControls from '../components/GateControls';
 import { PASS_TYPES, normalizePlate } from '@residencial/shared';
 import { fmtTime, timeAgo } from '../lib/utils';
 import QrScanner from '../components/QrScanner';
@@ -14,6 +29,7 @@ export default function Gate() {
   const inside = db.accessLogs.filter((l) => !l.exitAt);
   const today = db.accessLogs.filter((l) => new Date(l.at).toDateString() === new Date().toDateString());
   const sos = db.sos.filter((s) => s.status === 'active');
+  const gate = useOfflineGate();
 
   return (
     <>
@@ -39,6 +55,9 @@ export default function Gate() {
         </div>
       ))}
 
+      <OfflineBanner gate={gate} />
+      <GateControls />
+
       <div className="grid g3 hide-sm" style={{ marginBottom: 16 }}>
         <Stat label="Accesos hoy" value={today.length} />
         <Stat label="Dentro ahora" value={inside.length} />
@@ -58,16 +77,46 @@ export default function Gate() {
         />
       </div>
 
-      {tab === 'scan' && <ScanFlow />}
-      {tab === 'walkin' && <WalkIn />}
+      {tab === 'scan' && <ScanFlow gate={gate} />}
+      {tab === 'walkin' && <WalkIn gate={gate} />}
       {tab === 'general' && <GeneralAccess />}
       {tab === 'inside' && <Inside logs={inside} />}
     </>
   );
 }
 
-function ScanFlow() {
-  const { db, actions, toast } = useStore();
+function OfflineBanner({ gate }) {
+  const { offline, pack, queue, syncing, simulated, setSimulated } = gate;
+  return (
+    <>
+      {offline && (
+        <div className="banner warn" style={{ marginBottom: 12 }}>
+          <WifiOff size={18} />
+          <div style={{ flex: 1 }}>
+            <b>Sin conexión.</b>{' '}
+            {pack
+              ? `Validando con ${pack.passes.length} pase(s) guardado(s) (actualizados ${fmtTime(pack.generatedAt)}).`
+              : 'No hay pases guardados en esta tablet.'}{' '}
+            {queue.length > 0 && `${queue.length} entrada(s) se enviarán al volver el internet.`} Abre la pluma manualmente.
+          </div>
+        </div>
+      )}
+      {!offline && queue.length > 0 && (
+        <div className="banner info" style={{ marginBottom: 12 }}>
+          <RefreshCw size={18} /> {syncing ? 'Enviando' : 'Por enviar'} {queue.length} entrada(s) registradas sin conexión…
+        </div>
+      )}
+      {SHOW_DEMO_HELP && (
+        <label className="row faint" style={{ gap: 8, marginBottom: 12, fontSize: 13 }}>
+          <input type="checkbox" checked={simulated} onChange={(e) => setSimulated(e.target.checked)} /> Simular caseta sin internet
+        </label>
+      )}
+    </>
+  );
+}
+
+function ScanFlow({ gate }) {
+  const { db, toast } = useStore();
   const [manual, setManual] = useState('');
   const [result, setResult] = useState(null);
   const [plate, setPlate] = useState('');
@@ -79,8 +128,9 @@ function ScanFlow() {
   const check = async (text) => {
     let r;
     try {
-      r = await actions.checkCode(text);
-    } catch {
+      r = await gate.check(text);
+    } catch (e) {
+      toast('No se pudo validar', e.message, 'bad');
       return;
     }
     navigator.vibrate?.(r.ok ? 60 : [90, 60, 90]); // confirmación táctil en el celular del vigilante
@@ -100,8 +150,13 @@ function ScanFlow() {
 
   async function admit() {
     try {
-      const log = await actions.registerEntry({ passId: result.pass.id, plate, photo, companions: Number(companions), notes });
-      toast('Acceso registrado', `${log.visitorName} → ${unitLabel(db, log.unitId)}. Se notificó al residente.`);
+      const log = await gate.register(
+        { passId: result.pass.id, plate, photo, companions: Number(companions), notes },
+        { visitorName: result.pass.visitorName, unitId: result.pass.unitId },
+      );
+      if (log.offline)
+        toast('Guardado sin conexión', `${log.visitorName} → ${unitLabel(db, log.unitId)}. Se enviará al volver el internet.`);
+      else toast('Acceso registrado', `${log.visitorName} → ${unitLabel(db, log.unitId)}. Se notificó al residente.`);
       reset();
     } catch (e) {
       setResult({ ...result, ok: false, reason: e.message });
@@ -246,8 +301,8 @@ function RecentEntries() {
   );
 }
 
-function WalkIn() {
-  const { db, actions, toast } = useStore();
+function WalkIn({ gate }) {
+  const { db, toast } = useStore();
   const empty = { visitorName: '', type: 'paqueteria', unitId: '', plate: '', photo: '', notes: '' };
   const [f, setF] = useState(empty);
   const set = (k) => (v) => setF((x) => ({ ...x, [k]: v?.target ? v.target.value : v }));
@@ -255,12 +310,14 @@ function WalkIn() {
 
   async function submit() {
     if (!f.visitorName || !f.unitId) return toast('Faltan datos', 'Indica nombre y domicilio.', 'bad');
+    let log;
     try {
-      await actions.registerEntry(f);
-    } catch {
-      return;
+      log = await gate.register(f, { visitorName: f.visitorName });
+    } catch (e) {
+      return toast('No se pudo registrar', e.message, 'bad');
     }
-    toast('Visita registrada', `Se notificó a ${unitLabel(db, f.unitId)}.`);
+    if (log.offline) toast('Guardado sin conexión', 'Se enviará y se avisará al residente al volver el internet.');
+    else toast('Visita registrada', `Se notificó a ${unitLabel(db, f.unitId)}.`);
     setF(empty);
   }
 

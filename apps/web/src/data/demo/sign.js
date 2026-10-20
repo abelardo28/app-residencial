@@ -12,3 +12,6 @@ function fnv(str) {
 }
 
 export const demoSign = (payload) => fnv(payload + '|' + SECRET) + fnv(SECRET + '|' + payload);
+
+/** Huella de los QR para el paquete sin conexión de caseta (en la API es SHA-256). */
+export const demoHash = { alg: 'fnv', fn: (text) => fnv(text) + fnv(`${text}|2`) };

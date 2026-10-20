@@ -170,6 +170,13 @@ export default function ApiProvider({ children }) {
     );
     return {
       ...ops,
+      // Igual que las acciones pero sin aviso de error (la pantalla decide qué mostrar)
+      call: (name, ...args) =>
+        mutate(async () => {
+          const route = OPERATION_ROUTES[name];
+          const { path, body } = splitRoute(route, route.args(...args));
+          return (await api.request(route.method, `/tenant${path}`, route.method === 'DELETE' ? undefined : body))?.result;
+        }),
       logout: auth.logout,
       startEcartpay: (periods) =>
         withErrorToast(toast, async () => ({ ...(await api.post('/tenant/payments/ecartpay/checkout', { periods })), periods })),
@@ -210,9 +217,22 @@ export default function ApiProvider({ children }) {
     };
   }, [api, mutate, toast]);
 
+  // Simulador de WhatsApp (sólo en desarrollo: /dev/whatsapp responde como el asistente real)
+  const whatsapp = useMemo(
+    () => ({
+      contacts: async () => (await api.get('/dev/whatsapp/contacts')).contacts,
+      send: async (from, text) => {
+        const out = await api.post('/dev/whatsapp', { from, text });
+        if (sessionRef.current) refresh().catch(() => {});
+        return out;
+      },
+    }),
+    [api, refresh],
+  );
+
   const value = useMemo(
-    () => ({ mode: 'api', api, root, db, me, staffMe, session, actions, auth, accounts, platform, authNotice, toast, toasts }),
-    [api, root, db, me, staffMe, session, actions, auth, accounts, platform, authNotice, toast, toasts],
+    () => ({ mode: 'api', api, root, db, me, staffMe, session, actions, auth, accounts, platform, whatsapp, authNotice, toast, toasts }),
+    [api, root, db, me, staffMe, session, actions, auth, accounts, platform, whatsapp, authNotice, toast, toasts],
   );
   if (booting) return <div className="boot">Cargando…</div>;
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

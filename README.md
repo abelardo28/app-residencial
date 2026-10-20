@@ -92,6 +92,53 @@ La cámara (escáner QR y foto de placa) sólo funciona en `localhost` o con HTT
 - **Restricción por adeudo** (opcional, según el reglamento): con N meses vencidos la casa no puede reservar áreas comunes ni crear pases recurrentes. El acceso a la vivienda y los pases de una sola visita nunca se bloquean.
 - Las reglas están en `packages/shared/src/ledger.js` (estado de cuenta, recargos, referencias), `bank.js` (lectura del CSV) y las operaciones `reconcileBank`, `assignBankMovement`, `ignoreBankMovement` y `waiveLateFee`.
 
+### WhatsApp sin descargar la app
+
+Los residentes escriben «Hola» al WhatsApp del residencial y un asistente con menú numerado les permite:
+
+- **Crear un pase** para su visita (hoy o mañana) en dos mensajes, o directo con «pase Juan Pérez». La respuesta trae el código y un enlace que la visita abre para mostrar su QR en caseta; no necesita la app.
+- **Ver su saldo** con los meses, recargos, la CLABE y su referencia SPEI.
+- **Leer los avisos recientes** y **ver las visitas del día**.
+- Recibir **avisos nuevos** y **recordatorios de pago** (se pueden dar de baja respondiendo BAJA y reactivar con ALTA).
+
+Administración recibe un resumen (comprobantes por revisar, depósitos por asignar, adeudo, reportes) y vigilancia el enlace a su app. La persona se identifica por el teléfono registrado en su cuenta; las acciones pasan por las mismas reglas que la app (por ejemplo, las restricciones por adeudo).
+
+En la demo y en desarrollo, el botón **WhatsApp** (pantalla de inicio y barra superior) abre un simulador: eliges a la persona y chateas como lo haría desde su teléfono.
+
+**Para producción** (WhatsApp Cloud API de Meta):
+
+1. En Meta for Developers registra el webhook `https://TU-API/api/v1/webhooks/whatsapp` con el token de `WHATSAPP_VERIFY_TOKEN` y suscríbete al campo `messages`.
+2. Define `WHATSAPP_APP_SECRET` (clave secreta de la app): cada mensaje recibido se valida con su firma `X-Hub-Signature-256`.
+3. Las respuestas del asistente se envían como texto (la persona acaba de escribir: ventana de 24 h). Los avisos y recordatorios inician la conversación, así que Meta exige plantillas aprobadas de categoría _Utilidad_:
+   - `WHATSAPP_NOTICE_TEMPLATE` (por omisión `aviso_residencial`): variables `{{1}}` residencial, `{{2}}` título, `{{3}}` resumen.
+   - `WHATSAPP_REMINDER_TEMPLATE` (por omisión `recordatorio_pago`): `{{1}}` nombre, `{{2}}` residencial, `{{3}}` saldo, `{{4}}` referencia.
+4. En _Configuración → WhatsApp_ activa el asistente y escribe el número que verán los residentes.
+
+### Caseta física: pluma, tags y cámaras
+
+En _Caseta física_ administración da de alta los equipos de la caseta y los tags de los residentes:
+
+- **Pluma**: se abre desde la app de vigilancia («Abrir pluma»), al registrar una visita con pase válido (configurable) y, si el residencial lo permite, desde la app del residente al llegar. Toda apertura queda en la bitácora.
+- **Tags RFID**: un tag activo abre la pluma de residentes al pasar por el lector; uno bloqueado o desconocido no abre y avisa a caseta.
+- **Cámaras de placas (LPR)**: la placa de un residente abre sola (configurable); la de una visita con pase avisa al vigilante para que la confirme; las demás sólo quedan registradas.
+- **Modo sin internet en la tablet de caseta**: cada 5 minutos la tablet guarda los pases vigentes de las siguientes 24 h (sólo la huella SHA-256 de cada QR, no el QR). Sin conexión valida contra ese paquete, guarda las entradas en una cola y las envía con su hora real al volver el internet. Si una entrada resulta inválida (por ejemplo, el mismo pase usado dos veces), se registra igual y se avisa a administración.
+
+Los equipos se conectan con el **agente de caseta** (`apps/gate-agent`), un programa de Node sin dependencias que corre en una computadora o Raspberry Pi de la caseta:
+
+```bash
+cd apps/gate-agent
+cp .env.example .env   # pega los tokens que genera la app en Caseta física → Equipos → Token
+npm start
+```
+
+- Recibe las órdenes de apertura en tiempo real por una conexión **saliente** (no hay que abrir puertos) y activa el relevador: `RELAY=shelly` (Shelly Gen1/Gen2), `RELAY=http` (cualquier controlador con URL) o `console` para probar.
+- Una orden que llega tarde (más de 20 s) nunca abre la pluma.
+- Lectores de tags tipo teclado USB (o Wiegand con convertidor): el agente lee el número y lo envía.
+- Cámaras con LPR: configúralas para enviar sus avisos HTTP a `http://IP-DEL-AGENTE:8090/?key=LPR_KEY` (Hikvision ANPR, Dahua o JSON `{"plate":"ABC123A"}`).
+- Cada equipo tiene su token; si se pierde la computadora, «Token» genera uno nuevo y el anterior deja de funcionar.
+
+Para dejarlo corriendo al encender la computadora, crea un servicio de systemd con `ExecStart=/usr/bin/node /opt/gate-agent/src/index.js` y `EnvironmentFile=/opt/gate-agent/.env`.
+
 ### Avisos y notificaciones
 
 - Avisos por tipo: general, reunión, documento, bitácora, mantenimiento o urgente, con **archivos adjuntos**.
@@ -190,7 +237,7 @@ apps/
       config.js             variables de entorno validadas (zod)
       db/                   SQLite (node:sqlite), migraciones, semilla de demo
       repositories/         acceso a datos (SQL sólo aquí)
-      modules/              auth, accounts, tenant, platform, me, events, dev (servicio + rutas)
+      modules/              auth, accounts, tenant, platform, me, events, whatsapp, devices, dev (servicio + rutas)
       plugins/              seguridad (helmet, CORS, límites) y sesión/CSRF
       messaging/            plantillas y despachador de correo/WhatsApp
       payments/             adaptador de Ecart Pay
@@ -201,9 +248,11 @@ apps/
       components/, pages/   pantallas (no saben si los datos vienen de la API o de la demo)
       services/             OCR y notificaciones del sistema
     deploy/nginx.conf       sirve la APP y reenvía /api
+  gate-agent/               agente de caseta: relevador de la pluma, lector de tags y cámara de placas
 packages/
   shared/
-    src/                    operaciones, validación, formato, vistas por rol, contrato REST
+    src/                    operaciones, validación, formato, vistas por rol, contrato REST,
+                            cobranza (ledger, bank), asistente de WhatsApp (whatsapp), caseta física (gate)
     src/demo/               datos de ejemplo
     test/
 docs/ARQUITECTURA.md

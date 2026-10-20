@@ -1,7 +1,7 @@
 // Validación de entrada de cada operación del residencial.
 // `z.object` descarta cualquier campo no declarado: el cliente no puede colar `status`, `residentId`, etc.
 import { z } from 'zod';
-import { OPERATIONS, PASS_MODES, PASS_TYPES } from '@residencial/shared';
+import { DEVICE_KINDS, LANES, OPERATIONS, PASS_MODES, PASS_TYPES } from '@residencial/shared';
 
 const MB = 1024 * 1024;
 const id = z.string().min(1).max(64);
@@ -60,6 +60,8 @@ export const OPERATION_SCHEMAS = {
     photo,
     notes: text(300).optional(),
     companions: z.number().int().min(0).max(50).optional(),
+    offlineAt: isoDate.optional(), // registrado sin internet en la tablet de caseta
+    openGate: z.boolean().optional(),
   }),
   registerExit: byId,
   generalAccess: z.object({ provider: requiredText(80), plate: text(12).optional(), photo, notes: text(300).optional() }),
@@ -180,7 +182,36 @@ export const OPERATION_SCHEMAS = {
     generalProviders: z.array(requiredText(60)).max(30).optional(),
     // data URL = foto propia · '' = foto de ejemplo · null = sin portada
     cover: dataUrl(3).or(z.literal('')).nullable().optional(),
+    gate: z.object({ autoOpenOnPass: z.boolean(), residentOpen: z.boolean(), autoOpenResidentPlates: z.boolean() }).optional(),
+    whatsapp: z.object({ enabled: z.boolean(), notices: z.boolean(), reminders: z.boolean(), number: text(20).optional() }).optional(),
   }),
+  setWhatsappAlerts: z.object({ enabled: z.boolean() }),
+
+  // ---------- Caseta física ----------
+  createDevice: z.object({
+    name: requiredText(60),
+    kind: z.enum(Object.keys(DEVICE_KINDS)),
+    lane: z.enum(Object.keys(LANES)),
+    barrierId: id.nullish(),
+  }),
+  updateDevice: z.object({
+    id,
+    name: requiredText(60).optional(),
+    lane: z.enum(Object.keys(LANES)).optional(),
+    barrierId: id.nullish(),
+    status: z.enum(['active', 'disabled']).optional(),
+  }),
+  rotateDeviceToken: byId,
+  deleteDevice: byId,
+  registerTag: z.object({ unitId: id, code: requiredText(40), label: text(60).optional() }),
+  updateTag: z.object({ id, status: z.enum(['active', 'blocked']).optional(), label: text(60).optional() }),
+  deleteTag: byId,
+  openGate: z.object({ deviceId: id.optional(), reason: text(120).optional() }),
+  offlinePack: empty,
+  // Operaciones que llegan del agente de la caseta (rutas /devices)
+  gateEvent: z.object({ kind: z.enum(['tag', 'plate']), value: requiredText(40) }),
+  ackGateCommand: z.object({ id, ok: z.boolean(), error: text(200).optional() }),
+  deviceStatus: z.object({ connected: z.boolean() }),
 };
 
 // Si se agrega una operación sin esquema, la API no arranca.

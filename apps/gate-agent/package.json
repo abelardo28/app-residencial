@@ -1,0 +1,18 @@
+{
+  "name": "@residencial/gate-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Agente de caseta: activa la pluma con las órdenes de la API y reenvía lecturas de tags RFID y cámaras de placas.",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "gate-agent": "src/index.js"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

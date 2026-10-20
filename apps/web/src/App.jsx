@@ -1,5 +1,5 @@
 import { Component } from 'react';
-import { HashRouter, MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { HashRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { StoreProvider, useStore, resetStorage } from './data/store';
 import Layout from './components/Layout';
 import Auth from './pages/auth/Auth';
@@ -18,6 +18,8 @@ import Polls from './pages/Polls';
 import Finances from './pages/Finances';
 import People from './pages/People';
 import SettingsPage from './pages/Settings';
+import GateDevices from './pages/GateDevices';
+import PublicPass from './pages/PublicPass';
 
 function Home() {
   const { me } = useStore();
@@ -34,6 +36,8 @@ function Only({ roles, children }) {
 
 function Routed() {
   const { me, session, staffMe } = useStore();
+  const { pathname } = useLocation();
+  if (pathname === '/qr') return <PublicPass />; // pase abierto por la visita, sin sesión
   if (session?.kind === 'platform' && staffMe) return <PortalRoutes />;
   if (!me) return <Auth />;
   return (
@@ -100,6 +104,14 @@ function Routed() {
           }
         />
         <Route
+          path="caseta"
+          element={
+            <Only roles={['admin']}>
+              <GateDevices />
+            </Only>
+          }
+        />
+        <Route
           path="configuracion"
           element={
             <Only roles={['admin']}>
@@ -122,7 +134,9 @@ const embedded = (() => {
     return true;
   }
 })();
-const Router = embedded ? MemoryRouter : HashRouter;
+const Router = embedded
+  ? ({ children }) => <MemoryRouter initialEntries={[window.location.hash.slice(1) || '/']}>{children}</MemoryRouter>
+  : HashRouter;
 
 class ErrorBoundary extends Component {
   state = { error: null };

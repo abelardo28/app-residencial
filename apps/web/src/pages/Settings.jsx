@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { billingSettings } from '@residencial/shared';
+import { billingSettings, gateSettings } from '@residencial/shared';
+import { Link } from 'react-router-dom';
 import { useStore } from '../data/store';
 import { money, monthLabel, fmtDate } from '../lib/utils';
 import { invoiceState } from './portal/Portal';
@@ -18,6 +19,9 @@ export default function SettingsPage() {
   const INV = { paid: ['Pagado', 'ok'], pending: ['Pendiente', 'warn'], overdue: ['Vencido', 'bad'] };
   const s = db.settings;
   const billing = billingSettings(s);
+  const [gate, setGate] = useState(gateSettings(s));
+  const [wa, setWa] = useState({ enabled: false, notices: true, reminders: true, number: '', ...(s.whatsapp || {}) });
+  const flag = (setter, k) => (e) => setter((x) => ({ ...x, [k]: e.target.checked }));
   const [f, setF] = useState({
     lateFee: billing.lateFee,
     graceDays: billing.lateFeeGraceDays,
@@ -48,6 +52,8 @@ export default function SettingsPage() {
           recurrentPasses: f.recurrentPasses,
         },
         bank: { name: f.bankName, clabe: f.clabe, holder: f.holder },
+        gate,
+        whatsapp: wa,
         generalProviders: f.providers
           .split(',')
           .map((x) => x.trim())
@@ -129,6 +135,55 @@ export default function SettingsPage() {
               </>
             )}
             <p className="faint">El acceso a la vivienda y los pases de una sola visita nunca se bloquean.</p>
+          </div>
+        </Card>
+        <Card>
+          <CardHead title="WhatsApp" subtitle="Los residentes crean pases, consultan su saldo y reciben avisos sin instalar la app." />
+          <div className="stack">
+            <label className="row" style={{ gap: 8 }}>
+              <input type="checkbox" checked={wa.enabled} onChange={flag(setWa, 'enabled')} /> Activar el asistente y los avisos por
+              WhatsApp
+            </label>
+            {wa.enabled && (
+              <>
+                <Field label="Número de WhatsApp del residencial" hint="Se muestra a los residentes para que le escriban.">
+                  <input
+                    className="input"
+                    value={wa.number}
+                    onChange={(e) => setWa((x) => ({ ...x, number: e.target.value }))}
+                    placeholder="+52 55 0000 0000"
+                  />
+                </Field>
+                <label className="row" style={{ gap: 8 }}>
+                  <input type="checkbox" checked={wa.notices} onChange={flag(setWa, 'notices')} /> Enviar los avisos nuevos
+                </label>
+                <label className="row" style={{ gap: 8 }}>
+                  <input type="checkbox" checked={wa.reminders} onChange={flag(setWa, 'reminders')} /> Enviar los recordatorios de pago
+                </label>
+                <p className="faint">Cada residente puede responder BAJA para dejar de recibir avisos.</p>
+              </>
+            )}
+          </div>
+        </Card>
+        <Card>
+          <CardHead title="Caseta física" subtitle="Cómo se comportan las plumas conectadas.">
+            <Link to="/caseta" className="btn sm ghost">
+              Equipos y tags
+            </Link>
+          </CardHead>
+          <div className="stack">
+            <label className="row" style={{ gap: 8 }}>
+              <input type="checkbox" checked={gate.autoOpenOnPass} onChange={flag(setGate, 'autoOpenOnPass')} /> Abrir la pluma al registrar
+              una visita con pase válido
+            </label>
+            <label className="row" style={{ gap: 8 }}>
+              <input type="checkbox" checked={gate.autoOpenResidentPlates} onChange={flag(setGate, 'autoOpenResidentPlates')} /> Abrir sola
+              con la placa de un residente
+            </label>
+            <label className="row" style={{ gap: 8 }}>
+              <input type="checkbox" checked={gate.residentOpen} onChange={flag(setGate, 'residentOpen')} /> Permitir a los residentes abrir
+              la pluma desde la app
+            </label>
           </div>
         </Card>
         <Card>

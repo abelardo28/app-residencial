@@ -78,6 +78,13 @@ export function accountsRepository(db) {
     findById: (id) => toAccount(byId.get(id)),
     findByEmail: (email) => toAccount(byEmail.get(email)),
     listByTenant: (tenantId) => byTenant.all(tenantId).map(toAccount),
+    /** Cuenta activa de un residencial con este teléfono (para el asistente de WhatsApp). */
+    findActiveByPhone: (phone) =>
+      toAccount(
+        db
+          .prepare("SELECT * FROM users WHERE phone = ? AND scope = 'tenant' AND status = 'active' ORDER BY last_login_at DESC LIMIT 1")
+          .get(phone),
+      ),
     listStaff: () => staff.all().map(toAccount),
 
     create(a) {

@@ -19,11 +19,13 @@ import {
   DoorOpen,
   Settings,
   MoreHorizontal,
+  Cpu,
 } from 'lucide-react';
 import { useStore, unitLabel } from '../data/store';
 import NotificationsPanel from './NotificationsPanel';
 import SosButton from './SosButton';
 import { DemoOutboxButton } from './DemoOutbox';
+import { WhatsappSimButton } from './WhatsappSim';
 import { initials } from '../lib/utils';
 import { coverOf } from '../lib/cover';
 
@@ -98,6 +100,7 @@ export default function Layout() {
           ['/paquetes', 'Paquetería', Package],
           ['/votaciones', 'Votaciones', Vote],
           ['/finanzas', 'Finanzas', PieChart],
+          ['/caseta', 'Caseta física', Cpu],
           ['/configuracion', 'Configuración', Settings],
         ],
       ],
@@ -183,6 +186,7 @@ export default function Layout() {
           <div className="faint hide-sm">{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
           <div className="spacer" />
           {me.role === 'admin' && <DemoOutboxButton />}
+          <WhatsappSimButton />
           {me.role === 'resident' && <SosButton />}
           <button className="btn icon-btn" onClick={() => setShowNotifs(true)} aria-label="Notificaciones">
             <Bell size={18} />

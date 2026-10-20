@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { QrCode, Wallet, Megaphone, Package, DoorOpen, CalendarDays, ArrowRight, Vote, Wrench } from 'lucide-react';
+import { QrCode, Wallet, Megaphone, Package, DoorOpen, CalendarDays, ArrowRight, Vote, Wrench, MessageCircle } from 'lucide-react';
 import { useStore, unitLabel } from '../data/store';
-import { passStatus } from '@residencial/shared';
+import { gateSettings, passStatus } from '@residencial/shared';
 import { money, timeAgo, fmtTime, monthLabel } from '../lib/utils';
-import { Badge, Card, CardHead, Empty, Stat } from '../components/ui';
+import { Badge, Button, Card, CardHead, Empty, Stat } from '../components/ui';
+import { barrierState } from '../components/GateControls';
 import { ledger } from '@residencial/shared';
 
 export default function ResidentHome() {
@@ -36,6 +38,8 @@ export default function ResidentHome() {
           <b style={{ marginLeft: 'auto' }}>Pagar ahora</b>
         </Link>
       )}
+
+      <ArrivalAndWhatsapp />
 
       <div className="quick-actions show-sm">
         {[
@@ -172,5 +176,63 @@ export default function ResidentHome() {
         </Card>
       </div>
     </>
+  );
+}
+
+/** Abrir la pluma al llegar (si el residencial lo permite) y avisos por WhatsApp. */
+function ArrivalAndWhatsapp() {
+  const { db, me, actions, toast } = useStore();
+  const [busy, setBusy] = useState(false);
+  const barrier = gateSettings(db.settings).residentOpen
+    ? (db.devices || []).find((d) => d.lane === 'residentes') || db.devices?.[0]
+    : null;
+  const wa = db.settings.whatsapp;
+  const optedOut = (db.whatsappOptOuts || []).some((o) => o.id === me.id);
+  if (!barrier && !wa?.enabled) return null;
+  const st = barrier && barrierState(db.gateCommands || [], barrier.id);
+  return (
+    <div className="grid g2" style={{ marginBottom: 16 }}>
+      {barrier && (
+        <Card>
+          <CardHead title="¿Llegando a casa?" subtitle={`Abre la ${barrier.name.toLowerCase()} desde aquí. Queda registrado.`} />
+          <div className="row">
+            <Button
+              variant="primary"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await actions.openGate({ deviceId: barrier.id });
+                  toast('Abriendo pluma', barrier.name);
+                } catch {
+                  /* el motivo ya se mostró */
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <DoorOpen size={16} /> Abrir pluma
+            </Button>
+            {st && <Badge tone={st[1]}>{st[0]}</Badge>}
+          </div>
+        </Card>
+      )}
+      {wa?.enabled && (
+        <Card>
+          <CardHead
+            title="También por WhatsApp"
+            subtitle={`Escribe «Hola»${wa.number ? ` al ${wa.number}` : ' al WhatsApp del residencial'} para crear pases, ver tu saldo y leer avisos.`}
+          />
+          <div className="row between">
+            <span className="faint">
+              <MessageCircle size={14} /> Avisos por WhatsApp: {optedOut ? 'desactivados' : 'activados'}
+            </span>
+            <Button size="sm" onClick={() => actions.setWhatsappAlerts(optedOut).catch(() => {})}>
+              {optedOut ? 'Activar' : 'Desactivar'}
+            </Button>
+          </div>
+        </Card>
+      )}
+    </div>
   );
 }

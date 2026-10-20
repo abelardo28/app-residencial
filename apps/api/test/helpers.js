@@ -7,8 +7,8 @@ import { seedDemo } from '../src/db/seed.js';
 export const PASSWORD = 'Demo#2026';
 export const COMPANY_PASSWORD = 'Empresa#2026';
 
-export async function createTestApp() {
-  const config = loadConfig({ NODE_ENV: 'test', LOG_LEVEL: 'silent', DATABASE_PATH: ':memory:' });
+export async function createTestApp(env = {}) {
+  const config = loadConfig({ NODE_ENV: 'test', LOG_LEVEL: 'silent', DATABASE_PATH: ':memory:', ...env });
   const db = openDatabase(':memory:');
   const app = await buildApp(config, { db, logger: false });
   await seedDemo(app.ctx.repos, config);

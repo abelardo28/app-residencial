@@ -52,6 +52,18 @@ export const OPERATION_ROUTES = {
 
   updateUser: { method: 'PATCH', path: '/users/:id', args: (id, data) => ({ id, ...data }) },
   updateSettings: { method: 'PATCH', path: '/settings', args: same },
+  setWhatsappAlerts: { method: 'POST', path: '/whatsapp/alerts', args: one('enabled') },
+
+  // Caseta física (las operaciones de los equipos tienen sus propias rutas en /devices)
+  createDevice: { method: 'POST', path: '/gate/devices', args: same },
+  updateDevice: { method: 'PATCH', path: '/gate/devices/:id', args: (id, data) => ({ id, ...data }) },
+  rotateDeviceToken: { method: 'POST', path: '/gate/devices/:id/token', args: one('id') },
+  deleteDevice: { method: 'DELETE', path: '/gate/devices/:id', args: one('id') },
+  registerTag: { method: 'POST', path: '/gate/tags', args: same },
+  updateTag: { method: 'PATCH', path: '/gate/tags/:id', args: (id, data) => ({ id, ...data }) },
+  deleteTag: { method: 'DELETE', path: '/gate/tags/:id', args: one('id') },
+  openGate: { method: 'POST', path: '/gate/open', args: same },
+  offlinePack: { method: 'POST', path: '/access/offline-pack', args: () => ({}) },
 };
 
 /** Separa una entrada en la ruta concreta y el cuerpo, p. ej. `/passes/p_1/revoke` + `{}`. */

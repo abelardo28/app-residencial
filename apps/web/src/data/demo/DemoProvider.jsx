@@ -23,13 +23,17 @@ import {
   normPhone,
   maskEmail,
   maskPhone,
+  botTurn,
+  normalizePhone,
+  pendingCommands,
+  BOT_STATE_MINUTES,
 } from '@residencial/shared';
 import { StoreContext } from '../context';
 import { useNotificationAlerts, useToasts, withErrorToast } from '../common';
 import { seedRoot } from './seedRoot';
-import { demoSign } from './sign';
+import { demoHash, demoSign } from './sign';
 import { sha256, randomDigits, randomHex, verifyPassword, hashPassword, createInvite, safeEqual } from './crypto';
-import { templates } from './messages';
+import { appLink, templates } from './messages';
 import { KEY, SESSION, safe } from './storage';
 
 const { MAX_LOGIN_ATTEMPTS, LOCK_MINUTES, MFA_MINUTES, MAX_CODE_ATTEMPTS, SESSION_HOURS, IDLE_MINUTES } = SECURITY;
@@ -52,7 +56,7 @@ const COLLECTIONS = [
 ];
 const validTenant = (t) => t?.settings && COLLECTIONS.every((c) => Array.isArray(t[c]));
 // Colecciones agregadas después: los datos guardados en versiones anteriores las reciben vacías.
-const LATER_COLLECTIONS = ['bankMovements'];
+const LATER_COLLECTIONS = ['bankMovements', 'devices', 'tags', 'gateCommands', 'gateEvents', 'whatsappOptOuts'];
 const upgrade = (data) => {
   for (const t of Object.values(data.tenants)) for (const c of LATER_COLLECTIONS) t[c] = Array.isArray(t[c]) ? t[c] : [];
   return data;
@@ -199,16 +203,14 @@ export default function DemoProvider({ children }) {
   // Avisa (toast + notificación del sistema) cuando llega algo nuevo para el usuario activo.
   useNotificationAlerts(db?.notifications, userId, toast);
 
-  // Ejecuta una operación compartida sobre el residencial de la sesión, con las mismas reglas que la API.
-  // `trusted` simula lo que en la API verifica el servidor (por ejemplo, el cobro de Ecart Pay).
-  const execute = useCallback((name, input, trusted = {}) => {
-    const s = sessionRef.current;
-    if (s?.kind !== 'tenant') throw new DomainError('Inicia sesión para continuar.', 401);
+  // Corre `fn({ t, exec, user })` sobre un residencial, con las mismas reglas que la API.
+  // `actor(next)` dice quién ejecuta: la persona de la sesión, quien escribe por WhatsApp o un equipo de caseta.
+  const transact = useCallback((tenantId, actor, fn) => {
     const apply = (prev) => {
-      const tenantId = s.tenantId;
       const t = createTx({ ...prev.tenants[tenantId] });
-      const user = t.next.users.find((u) => u.id === s.userId);
-      const value = runOperation(name, t, { user, sign: demoSign, trusted }, input);
+      const user = actor(t.next);
+      const exec = (name, input, trusted = {}) => runOperation(name, t, { user, sign: demoSign, hash: demoHash, tenantId, trusted }, input);
+      const value = fn({ t, exec, user });
       let next = { ...prev, tenants: { ...prev.tenants, [tenantId]: t.next } };
       if (t.side.audit.length)
         next = pushPlatform(
@@ -216,7 +218,12 @@ export default function DemoProvider({ children }) {
           'audit',
           t.side.audit.map((e) => auditItem({ tenantId, actor: user.name, ...e })),
         );
-      if (t.side.outbox.length) next = pushPlatform(next, 'outbox', t.side.outbox);
+      if (t.side.outbox.length)
+        next = pushPlatform(
+          next,
+          'outbox',
+          t.side.outbox.map((m) => ({ id: uid('msg_'), at: nowIso(), ...m })),
+        );
       return { value, next };
     };
     const base = rootRef.current;
@@ -225,6 +232,94 @@ export default function DemoProvider({ children }) {
     setRoot((cur) => (cur === base ? next : apply(cur).next));
     return value;
   }, []);
+
+  // Ejecuta una operación como la persona de la sesión.
+  // `trusted` simula lo que en la API verifica el servidor (por ejemplo, el cobro de Ecart Pay).
+  const execute = useCallback(
+    (name, input, trusted = {}) => {
+      const s = sessionRef.current;
+      if (s?.kind !== 'tenant') throw new DomainError('Inicia sesión para continuar.', 401);
+      return transact(
+        s.tenantId,
+        (next) => next.users.find((u) => u.id === s.userId),
+        ({ exec }) => exec(name, input, trusted),
+      );
+    },
+    [transact],
+  );
+
+  // ---------- Simuladores: WhatsApp y equipos de caseta ----------
+  const botStates = useRef(new Map());
+  const whatsapp = useMemo(() => {
+    const contacts = () =>
+      Object.entries(rootRef.current.tenants).flatMap(([tenantId, t]) =>
+        t.users
+          .filter((u) => u.phone && u.auth?.status === 'active')
+          .map((u) => ({ phone: u.phone, name: u.name, role: u.role, residencial: t.settings.name, tenantId, userId: u.id })),
+      );
+    return {
+      contacts: async () => contacts(),
+      async send(from, text) {
+        await wait(350);
+        const phone = normalizePhone(from);
+        const c = contacts().find((x) => normalizePhone(x.phone) === phone);
+        if (!c)
+          return { replies: ['Hola. Este número no está registrado en ningún residencial. Pide a tu administración que te dé de alta.'] };
+        const prev = botStates.current.get(phone);
+        const state = prev && prev.userId === c.userId && Date.now() - prev.at < BOT_STATE_MINUTES * 60e3 ? prev.state : null;
+        const links = {
+          app: (path) => appLink(path),
+          pass: (p) => appLink(`/qr?t=${encodeURIComponent(p.token)}&n=${encodeURIComponent(p.visitorName)}`),
+        };
+        try {
+          const out = transact(
+            c.tenantId,
+            (next) => next.users.find((u) => u.id === c.userId),
+            ({ t, exec, user }) => botTurn({ tenant: t.next, user, text, state, exec, links }),
+          );
+          botStates.current.set(phone, { userId: c.userId, state: out.state, at: Date.now() });
+          return { replies: out.replies };
+        } catch (e) {
+          botStates.current.delete(phone);
+          return { replies: [e.message] };
+        }
+      },
+    };
+  }, [transact]);
+
+  const asDevice = useCallback(
+    (tenantId, deviceId, name, input) =>
+      transact(
+        tenantId,
+        (next) => ({ ...next.devices.find((d) => d.id === deviceId), role: 'device' }),
+        ({ exec }) => exec(name, input),
+      ),
+    [transact],
+  );
+  // En la demo no hay agente en la caseta: las órdenes de abrir se confirman solas tras un momento.
+  useEffect(() => {
+    const tenantId = session?.tenantId;
+    const commands = db?.gateCommands || [];
+    const pending = (db?.devices || []).flatMap((d) => pendingCommands(commands, d.id));
+    if (!tenantId || !pending.length) return;
+    const timer = setTimeout(() => {
+      for (const c of pending)
+        try {
+          asDevice(tenantId, c.deviceId, 'ackGateCommand', { id: c.id, ok: true });
+        } catch {
+          /* el equipo ya no existe */
+        }
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [db?.gateCommands, db?.devices, session?.tenantId, asDevice]);
+  const gateSim = useMemo(
+    () => ({
+      /** Simula una lectura del lector de tags o de la cámara de placas. */
+      read: (deviceId, kind, value) =>
+        withErrorToast(toast, () => asDevice(sessionRef.current.tenantId, deviceId, 'gateEvent', { kind, value })),
+    }),
+    [asDevice, toast],
+  );
 
   // ---------- Autenticación ----------
   const auth = useMemo(() => {
@@ -755,6 +850,8 @@ export default function DemoProvider({ children }) {
     );
     return {
       ...ops,
+      // Igual que las acciones pero sin aviso de error (la pantalla decide qué mostrar)
+      call: async (name, ...args) => execute(name, OPERATION_ROUTES[name].args(...args)),
       logout: auth.logout,
       resetDemo() {
         setRoot(seedRoot());
@@ -775,8 +872,24 @@ export default function DemoProvider({ children }) {
   }, [execute, auth, toast, setSession]);
 
   const value = useMemo(
-    () => ({ mode: 'demo', root, db, me, staffMe, session, actions, auth, accounts, platform, authNotice, toast, toasts }),
-    [root, db, me, staffMe, session, actions, auth, accounts, platform, authNotice, toast, toasts],
+    () => ({
+      mode: 'demo',
+      root,
+      db,
+      me,
+      staffMe,
+      session,
+      actions,
+      auth,
+      accounts,
+      platform,
+      whatsapp,
+      gateSim,
+      authNotice,
+      toast,
+      toasts,
+    }),
+    [root, db, me, staffMe, session, actions, auth, accounts, platform, whatsapp, gateSim, authNotice, toast, toasts],
   );
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

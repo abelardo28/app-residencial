@@ -3,7 +3,7 @@
 // dentro de una transacción y se guardan los cambios, la auditoría y los mensajes.
 import { amountDue, createTx, money, monthLabel, payableMonths, runOperation, viewFor } from '@residencial/shared';
 import { transaction } from '../../db/database.js';
-import { passSigner } from '../../lib/crypto.js';
+import { passSigner, sha256 } from '../../lib/crypto.js';
 import { HttpError, badRequest, forbidden, notFound } from '../../lib/errors.js';
 import { toUserView } from '../../repositories/accounts.js';
 
@@ -25,27 +25,50 @@ export function createTenantService({ repos, config, dispatch, events, ecartpay 
   const { db, accounts, tenants, platform } = repos;
   const sign = passSigner(config.ACCESS_SECRET);
 
-  /** Ejecuta una operación compartida como `acc`. `trusted` son datos que verificó el servidor. */
-  function execute(acc, name, input, trusted = {}) {
-    if (acc.scope !== 'tenant') throw forbidden();
-    const tenantId = acc.tenantId;
+  const hash = { alg: 'sha256', fn: sha256 }; // huellas del paquete sin conexión de caseta
+
+  /**
+   * Corre `fn({ t, exec, user })` en una transacción del residencial: carga sólo lo que se usa, guarda los cambios,
+   * la auditoría y los mensajes, y avisa a las pantallas conectadas. `actor(next)` devuelve quién ejecuta.
+   */
+  function withTenant(tenantId, actor, fn, reason = 'change') {
     const { value, changed } = transaction(db, () => {
       const uow = tenants.unitOfWork(tenantId, accounts);
       const t = createTx(uow.next);
-      const user = uow.next.users.find((u) => u.id === acc.id) || toUserView(acc);
-      const value = runOperation(name, t, { user, sign, trusted }, input);
+      const user = actor(uow.next);
+      const exec = (name, input, trusted = {}) => runOperation(name, t, { user, sign, hash, tenantId, trusted }, input);
+      const value = fn({ t, exec, user });
       const changed = uow.commit();
-      for (const e of t.side.audit) platform.audit({ tenantId, actor: acc.name, ...e });
+      for (const e of t.side.audit) platform.audit({ tenantId, actor: user.name, ...e });
       if (t.side.outbox.length) platform.enqueue(t.side.outbox);
       return { value, changed };
     });
-    if (changed) events.publish(tenantId, { reason: name });
+    if (changed) events.publish(tenantId, { reason });
     dispatch();
     return value ?? null;
   }
 
+  const userOf = (acc) => (next) => next.users.find((u) => u.id === acc.id) || toUserView(acc);
+
+  /** Ejecuta una operación compartida como `acc`. `trusted` son datos que verificó el servidor. */
+  function execute(acc, name, input, trusted = {}) {
+    if (acc.scope !== 'tenant') throw forbidden();
+    return withTenant(acc.tenantId, userOf(acc), ({ exec }) => exec(name, input, trusted), name);
+  }
+
   return {
     execute,
+    withTenant,
+    userOf,
+
+    /** Operación ejecutada por un equipo de caseta (pluma, lector o cámara). */
+    executeAsDevice: (device, name, input) =>
+      withTenant(
+        device.tenantId,
+        () => ({ ...device, role: 'device' }),
+        ({ exec }) => exec(name, input),
+        name,
+      ),
 
     /** Todo lo que la APP necesita para mostrar la sesión de un usuario del residencial. */
     snapshot(acc) {

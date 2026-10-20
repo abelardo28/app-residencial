@@ -64,6 +64,14 @@ Token opaco aleatorio en una cookie `sid` HttpOnly, SameSite=Strict y Secure, co
 
 Correos y WhatsApp se guardan en la tabla `outbox` en la misma transacción que el cambio (patrón _transactional outbox_) y un despachador los envía con reintentos. Así no se pierde un aviso si el proveedor falla, ni se envía uno de un cambio que se revirtió. En modo `live` el cuerpo (que lleva enlaces y códigos) se borra después de enviarlo.
 
+### Asistente de WhatsApp
+
+`modules/whatsapp` recibe el webhook de Meta (firma `X-Hub-Signature-256` validada con el cuerpo sin procesar, mensajes repetidos descartados por su id) y busca la cuenta por teléfono. La conversación (`shared/whatsapp.js` → `botTurn`) es una función pura: recibe el mensaje, el estado anterior y una función `exec` que corre operaciones compartidas como esa persona dentro de la misma transacción. El estado de cada conversación vive en `whatsapp_sessions` (30 min). Las respuestas salen por la bandeja de salida como texto; los avisos y recordatorios, con plantilla aprobada.
+
+### Caseta física
+
+Los equipos nunca reciben conexiones entrantes: el agente de caseta abre `GET /api/v1/devices/stream` (SSE) con un token `RD1.<residencial>.<equipo>.<versión>.<firma>` (HMAC con la clave del servidor; renovarlo sube la versión y revoca el anterior). Las órdenes de apertura se guardan como registros (`gateCommands`) con vigencia de 20 s; el stream las envía al crearse y el agente confirma con `POST /devices/commands/:id/ack`. Las lecturas de tags y placas llegan a `POST /devices/events` y se resuelven con la operación `gateEvent`, que corre con el rol `device`. La tablet de vigilancia descarga con `offlinePack` las huellas SHA-256 de los QR vigentes para validar sin internet; las entradas guardadas se envían con `offlineAt` y el servidor marca los conflictos en lugar de rechazarlos.
+
 ### APP
 
 `data/store.jsx` elige el proveedor según `VITE_DATA_MODE`. Los dos (`data/api/ApiProvider.jsx` y `data/demo/DemoProvider.jsx`) exponen exactamente la misma forma (`root`, `db`, `me`, `session`, `actions`, `auth`, `accounts`, `platform`…) y todas las acciones devuelven promesas. Las pantallas esperan el resultado antes de mostrar "listo" y, si algo falla, el proveedor muestra el motivo que dio la API.

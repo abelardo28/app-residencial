@@ -8,7 +8,9 @@
 // Los campos que no debe decidir el cliente (ids, autor, estado, fechas) siempre se escriben después del input.
 import { uid, nowIso, shortCode, numericCode, money, monthLabel, fmtTime } from './format.js';
 import { buildToken, evaluatePass, parseInput, normalizePlate, PASS_TYPES } from './access.js';
-import { debtRestriction, payableRows, unitByReference } from './ledger.js';
+import { debtRestriction, payableRows, unitByReference, unitReference } from './ledger.js';
+import { GATE_OPERATIONS, openAfterEntry } from './gate.js';
+import { whatsappMessages } from './whatsapp.js';
 import { DomainError, forbidden } from './tx.js';
 
 const RESIDENT = ['resident'];
@@ -35,6 +37,14 @@ const paymentOf = (row, data) => ({
   ...data,
 });
 const bankMovements = (t) => t.next.bankMovements || (t.next.bankMovements = []);
+
+/** Hora de un registro hecho sin conexión: se acepta hasta 72 h atrás y nunca en el futuro. */
+function offlineTime(iso) {
+  const at = new Date(iso).getTime();
+  const now = Date.now();
+  if (!(at <= now + 60e3 && at >= now - 72 * 3600e3)) throw new DomainError('La hora del registro sin conexión no es válida.');
+  return new Date(Math.min(at, now)).toISOString();
+}
 
 const pick = (obj, keys) => Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
@@ -117,11 +127,16 @@ export const OPERATIONS = {
   // ---------- Accesos ----------
   registerEntry: {
     roles: GUARD,
-    run(t, { user }, { passId, visitorName, type, unitId, plate, photo, notes, companions = 0 }) {
+    run(t, { user }, { passId, visitorName, type, unitId, plate, photo, notes, companions = 0, offlineAt, openGate }) {
       const pass = passId ? t.must('passes', passId, 'El pase') : null;
+      // Registro hecho sin internet en la tablet: la visita ya entró, así que no se rechaza; si el pase
+      // ya no era válido (por ejemplo, se usó dos veces) se marca y se avisa a administración.
+      const at = offlineAt ? offlineTime(offlineAt) : nowIso();
+      let offlineConflict = null;
       if (pass) {
-        const check = evaluatePass(pass);
-        if (!check.ok) throw new DomainError(check.reason, 409, 'pass_invalid');
+        const check = evaluatePass(pass, new Date(at));
+        if (!check.ok && !offlineAt) throw new DomainError(check.reason, 409, 'pass_invalid');
+        if (!check.ok) offlineConflict = check.reason;
       } else {
         if (!visitorName?.trim()) throw new DomainError('Escribe el nombre del visitante.');
         if (!t.next.units.some((u) => u.id === unitId)) throw new DomainError('Elige un domicilio válido.');
@@ -141,10 +156,18 @@ export const OPERATIONS = {
         notes,
         companions,
         guardId: user.id,
-        at: nowIso(),
+        at,
         exitAt: null,
+        ...(offlineAt ? { offline: true, syncedAt: nowIso(), offlineConflict } : {}),
       };
       t.add('accessLogs', log);
+      if (offlineConflict)
+        t.notify(t.admins(), {
+          title: 'Revisa un acceso sin conexión',
+          body: `${log.visitorName} entró a las ${fmtTime(at)} sin internet en caseta, pero el pase no era válido: ${offlineConflict}.`,
+          kind: 'alert',
+          link: '/accesos',
+        });
       if (pass) t.patch('passes', pass.id, (p) => ({ uses: [...p.uses, { at: log.at, guardId: user.id, logId: log.id }] }));
       const who = PASS_TYPES[log.type] || log.type;
       t.notify(t.unitResidents(log.unitId), {
@@ -161,6 +184,7 @@ export const OPERATIONS = {
           link: '/accesos',
         });
       }
+      if (!offlineAt) openAfterEntry(t, user, log, openGate);
       return log;
     },
   },
@@ -326,6 +350,20 @@ export const OPERATIONS = {
         kind: 'payment',
         link: '/pagos',
       });
+      const org = t.next.settings.name;
+      const owed = (u) => money(payableRows(t.next, u.unitId).reduce((sum, r) => sum + r.amount, 0));
+      t.send(
+        whatsappMessages(
+          t.next,
+          valid.map((id) => t.get('users', id)),
+          {
+            kind: 'reminder',
+            body: (u) =>
+              `${org}: hola ${u.name.split(' ')[0]}, tienes un saldo pendiente de ${owed(u)}. Paga por SPEI con tu referencia ${unitReference(t.next, u.unitId)} o responde *2* para ver los datos de pago.`,
+            params: (u) => [u.name.split(' ')[0], org, owed(u), unitReference(t.next, u.unitId)],
+          },
+        ),
+      );
       return { sent: valid.length };
     },
   },
@@ -508,6 +546,21 @@ export const OPERATIONS = {
         kind: 'notice',
         link: '/avisos',
       });
+      if (notice.audience !== 'staff') {
+        const org = t.next.settings.name;
+        const summary = notice.body.length > 300 ? `${notice.body.slice(0, 300)}…` : notice.body;
+        t.send(
+          whatsappMessages(
+            t.next,
+            targets.map((id) => t.get('users', id)).filter((u) => u.role === 'resident'),
+            {
+              kind: 'notice',
+              body: `*${org}*\n${notice.title}\n\n${summary}\n\nResponde *3* para ver los avisos recientes.`,
+              params: [org, notice.title, summary],
+            },
+          ),
+        );
+      }
       return notice;
     },
   },
@@ -726,6 +779,16 @@ export const OPERATIONS = {
       t.patch('users', id, pick(data, ['name', 'unitId', 'vehicles', 'shift']));
     },
   },
+  // Alta o baja de los avisos por WhatsApp (la persona responde BAJA / ALTA en el chat o lo cambia en la APP).
+  setWhatsappAlerts: {
+    roles: ALL,
+    run(t, { user }, { enabled }) {
+      const has = t.get('whatsappOptOuts', user.id);
+      if (enabled && has) t.remove('whatsappOptOuts', user.id);
+      if (!enabled && !has) t.add('whatsappOptOuts', { id: user.id, at: nowIso() });
+    },
+  },
+
   updateSettings: {
     roles: ADMIN,
     run(t, _ctx, data) {
@@ -742,12 +805,16 @@ export const OPERATIONS = {
           'amenities',
           'generalProviders',
           'cover',
+          'gate',
+          'whatsapp',
         ]),
       };
       if (data.cover === '') delete t.next.settings.cover; // '' = volver a la foto de ejemplo
       t.audit({ action: 'Configuración actualizada', target: Object.keys(data).join(', ') });
     },
   },
+
+  ...GATE_OPERATIONS,
 };
 
 /** Ejecuta una operación verificando el rol. Devuelve lo que regrese la operación. */

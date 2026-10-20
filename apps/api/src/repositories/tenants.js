@@ -16,6 +16,11 @@ export const COLLECTIONS = [
   'expenses',
   'sos',
   'bankMovements',
+  'devices',
+  'tags',
+  'gateCommands',
+  'gateEvents',
+  'whatsappOptOuts',
 ];
 
 const toTenant = (r) =>
