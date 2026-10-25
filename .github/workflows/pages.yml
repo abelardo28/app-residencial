@@ -29,7 +29,7 @@ jobs:
       # Rutas relativas: la demo vive en https://USUARIO.github.io/app-residencial/
       - run: node scripts/copy-ocr-assets.mjs && npx vite build --mode demo --base ./
         working-directory: apps/web
-      # iPhone no resuelve bien start_url relativo al «Agregar a inicio»: lo fijamos a /app-residencial/
+      # iPhone guarda mal la ruta si es relativa al «Agregar a inicio»: la fijamos a /app-residencial/
       - run: sed -i 's#"\./"#"/${{ github.event.repository.name }}/"#g' apps/web/dist/manifest.webmanifest && grep -E '"(id|start_url|scope)"' apps/web/dist/manifest.webmanifest
       - uses: actions/upload-pages-artifact@v3
         with:
