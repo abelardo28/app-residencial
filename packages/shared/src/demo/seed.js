@@ -282,6 +282,18 @@ export function seedTenant({ sign }) {
       { id: 'am4', name: 'Alberca', capacity: 30, open: '08:00', close: '20:00', deposit: 0 },
     ],
     generalProviders: ['Recolección de basura', 'Pipa de agua', 'Gas', 'Jardinería', 'Fumigación', 'Mantenimiento CFE'],
+    // Concepto además de la cuota, para ver cómo aparece en el estado de cuenta
+    charges: [
+      {
+        id: 'ch_imper',
+        name: 'Impermeabilización de casetas',
+        amount: 450,
+        kind: 'once',
+        dueDate: d(20).slice(0, 10),
+        unitIds: [],
+        createdAt: d(-2),
+      },
+    ],
   };
 
   const reservations = [

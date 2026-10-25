@@ -1,5 +1,5 @@
 // Estado de cuenta de cada casa: cuotas, recargos, adeudo, referencia de pago y restricciones por adeudo.
-import { lastMonths, monthKey } from './format.js';
+import { lastMonths, monthKey, monthLabel } from './format.js';
 
 export const LEDGER_MONTHS = 4;
 
@@ -17,20 +17,80 @@ export const billingSettings = (settings = {}) => ({
 
 const dayOf = (m, today) => (m < monthKey(today) ? Infinity : m === monthKey(today) ? today.getDate() : -Infinity);
 
+/** Conceptos de cobro además de la cuota: un cargo único (p. ej. impermeabilización) o uno mensual (p. ej. cuota extraordinaria). */
+export const CHARGE_KINDS = { once: 'Cobro único', monthly: 'Cada mes' };
+
+/** Clave de cobro de un concepto: el id (único) o id@AAAA-MM (mensual). La cuota usa el mes (AAAA-MM). */
+export const chargeKey = (charge, month) => (charge.kind === 'monthly' ? `${charge.id}@${month}` : charge.id);
+export const chargeApplies = (charge, unitId) => !charge.unitIds?.length || charge.unitIds.includes(unitId);
+
+/** Cómo se nombra un pago: el mes de la cuota o el concepto. */
+export const periodLabel = (p) => (p.chargeId ? p.concept : monthLabel(p.period));
+/** Mes al que corresponde un pago (para los totales por mes). */
+export const paymentMonth = (p) => p.month || p.period;
+
+const isoDay = (d) => `${monthKey(d)}-${String(d.getDate()).padStart(2, '0')}`;
+const paymentsFor = (tenant, unitId, key) => {
+  const ps = tenant.payments.filter((p) => p.unitId === unitId && p.period === key);
+  return {
+    approved: ps.find((p) => p.status === 'approved'),
+    pending: ps.find((p) => p.status === 'pending'),
+    rejected: ps.find((p) => p.status === 'rejected'),
+  };
+};
+
+/** Filas de los conceptos que aplican a una casa. Los únicos se muestran mientras se deban o en la ventana del estado de cuenta. */
+function chargeRows(tenant, unitId, months, today) {
+  const { dueDay } = tenant.settings;
+  const todayIso = isoDay(today);
+  const rows = [];
+  for (const c of tenant.settings.charges || []) {
+    if (!chargeApplies(c, unitId)) continue;
+    const slots =
+      c.kind === 'monthly'
+        ? months
+            .filter((m) => m >= c.from && (!c.to || m <= c.to))
+            .map((m) => ({ month: m, due: `${m}-${String(dueDay).padStart(2, '0')}` }))
+        : [{ month: c.dueDate.slice(0, 7), due: c.dueDate }];
+    for (const { month, due } of slots) {
+      const key = chargeKey(c, month);
+      const { approved, pending, rejected } = paymentsFor(tenant, unitId, key);
+      if (c.archived && !approved && !pending) continue; // concepto eliminado: sólo queda lo ya pagado
+      if (approved && month < months[0]) continue;
+      const state = approved ? 'paid' : pending ? 'review' : todayIso > due ? 'overdue' : 'due';
+      const paid = approved || pending;
+      const amount = paid ? paid.amount : c.amount;
+      rows.push({
+        key,
+        month,
+        chargeId: c.id,
+        label: c.kind === 'monthly' ? `${c.name} · ${monthLabel(month)}` : c.name,
+        due,
+        state,
+        payment: approved || pending || rejected,
+        fee: amount,
+        lateFee: 0,
+        amount,
+        waived: false,
+      });
+    }
+  }
+  return rows;
+}
+
 /**
- * Estado de cada uno de los últimos meses para una casa.
- * Cada fila: { month, state: paid|review|overdue|due, payment, fee, lateFee, amount, waived }
+ * Estado de cuenta de una casa: la cuota de los últimos meses más los conceptos que le aplican, del más antiguo al más reciente.
+ * Cada fila: { key, month, label, chargeId?, state: paid|review|overdue|due, payment, fee, lateFee, amount, waived }
+ * `key` es lo que se paga (la API y las pantallas lo llaman «periodo»).
  */
 export function ledger(tenant, unitId, today = new Date()) {
   const { dueDay, monthlyFee } = tenant.settings;
   const { lateFee, lateFeeGraceDays } = billingSettings(tenant.settings);
   const unit = tenant.units?.find((u) => u.id === unitId);
   const waivedList = unit?.waivedLateFees || [];
-  return lastMonths(LEDGER_MONTHS, today).map((m) => {
-    const ps = tenant.payments.filter((p) => p.unitId === unitId && p.period === m);
-    const approved = ps.find((p) => p.status === 'approved');
-    const pending = ps.find((p) => p.status === 'pending');
-    const rejected = ps.find((p) => p.status === 'rejected');
+  const months = lastMonths(LEDGER_MONTHS, today);
+  const fees = months.map((m) => {
+    const { approved, pending, rejected } = paymentsFor(tenant, unitId, m);
     const day = dayOf(m, today);
     const overdue = day > dueDay;
     const state = approved ? 'paid' : pending ? 'review' : overdue ? 'overdue' : 'due';
@@ -39,29 +99,42 @@ export function ledger(tenant, unitId, today = new Date()) {
     const paidPayment = approved || pending;
     const fee = paidPayment ? paidPayment.amount - (paidPayment.lateFee || 0) : monthlyFee;
     const late = paidPayment ? paidPayment.lateFee || 0 : charge;
-    return { month: m, state, payment: approved || pending || rejected, fee, lateFee: late, amount: fee + late, waived };
+    return {
+      key: m,
+      month: m,
+      label: monthLabel(m),
+      state,
+      payment: approved || pending || rejected,
+      fee,
+      lateFee: late,
+      amount: fee + late,
+      waived,
+    };
   });
+  return [...fees, ...chargeRows(tenant, unitId, months, today)].sort(
+    (a, b) => a.month.localeCompare(b.month) || Number(!!a.chargeId) - Number(!!b.chargeId),
+  );
 }
 
-/** Meses que la casa puede pagar ahora (vencidos o por pagar), del más antiguo al más reciente. */
+/** Lo que la casa puede pagar ahora (vencido o por pagar), del más antiguo al más reciente. */
 export const payableRows = (tenant, unitId, today) =>
   ledger(tenant, unitId, today).filter((r) => r.state === 'overdue' || r.state === 'due');
-export const payableMonths = (tenant, unitId, today) => payableRows(tenant, unitId, today).map((r) => r.month);
+export const payableMonths = (tenant, unitId, today) => payableRows(tenant, unitId, today).map((r) => r.key);
 
-/** Importe a pagar por los meses indicados (cuota + recargo). Lanza si algún mes no se puede pagar. */
+/** Importe a pagar por los periodos indicados (cuota + recargo o concepto). Lanza si alguno no se puede pagar. */
 export function amountDue(tenant, unitId, periods, today) {
-  const rows = new Map(payableRows(tenant, unitId, today).map((r) => [r.month, r]));
+  const rows = new Map(payableRows(tenant, unitId, today).map((r) => [r.key, r]));
   return periods.reduce((sum, p) => {
     const r = rows.get(p);
-    if (!r) throw new Error(`El mes ${p} no se puede pagar.`);
+    if (!r) throw new Error(`El periodo ${p} no se puede pagar.`);
     return sum + r.amount;
   }, 0);
 }
 
-/** Adeudo vencido de una casa. */
+/** Adeudo vencido de una casa. `months` cuenta sólo cuotas vencidas (lo que usan las restricciones); `rows` incluye conceptos. */
 export function debtOf(tenant, unitId, today) {
   const overdue = ledger(tenant, unitId, today).filter((r) => r.state === 'overdue');
-  return { months: overdue.length, amount: overdue.reduce((s, r) => s + r.amount, 0), rows: overdue };
+  return { months: overdue.filter((r) => !r.chargeId).length, amount: overdue.reduce((s, r) => s + r.amount, 0), rows: overdue };
 }
 
 /**

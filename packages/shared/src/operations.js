@@ -8,10 +8,10 @@
 // Los campos que no debe decidir el cliente (ids, autor, estado, fechas) siempre se escriben después del input.
 import { uid, nowIso, shortCode, numericCode, money, monthLabel, fmtTime } from './format.js';
 import { buildToken, evaluatePass, parseInput, normalizePlate, PASS_TYPES } from './access.js';
-import { debtRestriction, payableRows, unitByReference, unitReference } from './ledger.js';
+import { chargeApplies, debtRestriction, payableRows, periodLabel, unitByReference, unitReference } from './ledger.js';
 import { GATE_OPERATIONS, openAfterEntry } from './gate.js';
 import { whatsappMessages } from './whatsapp.js';
-import { DomainError, forbidden } from './tx.js';
+import { DomainError, forbidden, notFound as notFoundError } from './tx.js';
 
 const RESIDENT = ['resident'];
 const GUARD = ['guard'];
@@ -21,16 +21,18 @@ const ALL = ['resident', 'guard', 'admin'];
 
 /** Filas pagables de los meses pedidos, o error si alguno ya está pagado o en revisión. */
 function rowsFor(t, unitId, periods) {
-  const rows = new Map(payableRows(t.next, unitId).map((r) => [r.month, r]));
-  const list = [...new Set(periods)];
-  if (!list.length || list.some((p) => !rows.has(p)))
-    throw new DomainError('Alguno de los meses ya está pagado o en revisión.', 409, 'period_unavailable');
-  return list.sort().map((p) => rows.get(p));
+  const all = payableRows(t.next, unitId);
+  const list = new Set(periods);
+  if (!list.size || [...list].some((p) => !all.some((r) => r.key === p)))
+    throw new DomainError('Alguno de los cargos ya está pagado o en revisión.', 409, 'period_unavailable');
+  return all.filter((r) => list.has(r.key));
 }
 const paymentOf = (row, data) => ({
   id: uid('pay_'),
-  concept: row.lateFee ? 'Cuota de mantenimiento + recargo' : 'Cuota de mantenimiento',
-  period: row.month,
+  concept: row.chargeId ? row.label : row.lateFee ? 'Cuota de mantenimiento + recargo' : 'Cuota de mantenimiento',
+  period: row.key,
+  month: row.month,
+  ...(row.chargeId ? { chargeId: row.chargeId } : {}),
   amount: row.amount,
   lateFee: row.lateFee,
   createdAt: nowIso(),
@@ -236,7 +238,6 @@ export const OPERATIONS = {
     roles: RESIDENT,
     run(t, { user, trusted }, { periods, method, receipt, reference, ecartpayId, notes }) {
       const rows = rowsFor(t, user.unitId, periods);
-      const list = rows.map((r) => r.month);
       const total = rows.reduce((sum, r) => sum + r.amount, 0);
       // Un pago con Ecart Pay sólo se aprueba si el servidor confirmó el cobro (y su monto) con el proveedor.
       const verified = method === 'ecartpay';
@@ -260,7 +261,7 @@ export const OPERATIONS = {
           ...(verified ? { reviewedBy: 'ecartpay', reviewedAt: now } : {}),
         }),
       );
-      const names = list.map(monthLabel).join(', ');
+      const names = rows.map((r) => r.label).join(', ');
       created.forEach((p) => t.add('payments', p));
       const unit = t.unitLabel(user.unitId);
       if (verified) {
@@ -298,14 +299,14 @@ export const OPERATIONS = {
         title: status === 'approved' ? 'Pago aprobado' : 'Pago rechazado',
         body:
           status === 'approved'
-            ? `Tu pago de ${monthLabel(p.period)} por ${money(p.amount)} fue aprobado.`
-            : `Tu pago de ${monthLabel(p.period)} fue rechazado${note ? `: ${note}` : '.'}`,
+            ? `Tu pago de ${periodLabel(p)} por ${money(p.amount)} fue aprobado.`
+            : `Tu pago de ${periodLabel(p)} fue rechazado${note ? `: ${note}` : '.'}`,
         kind: 'payment',
         link: '/pagos',
       });
       t.audit({
         action: status === 'approved' ? 'Pago aprobado' : 'Pago rechazado',
-        target: `${t.userName(p.residentId)} · ${monthLabel(p.period)}`,
+        target: `${t.userName(p.residentId)} · ${periodLabel(p)}`,
       });
     },
   },
@@ -333,11 +334,11 @@ export const OPERATIONS = {
       );
       t.notify([residentId], {
         title: 'Pago en efectivo registrado',
-        body: `Administración registró tu pago de ${periods.map(monthLabel).join(', ')}.`,
+        body: `Administración registró tu pago de ${rows.map((x) => x.label).join(', ')}.`,
         kind: 'payment',
         link: '/pagos',
       });
-      t.audit({ action: 'Pago en efectivo registrado', target: `${r.name} · ${periods.map(monthLabel).join(', ')}` });
+      t.audit({ action: 'Pago en efectivo registrado', target: `${r.name} · ${rows.map((x) => x.label).join(', ')}` });
     },
   },
   sendReminder: {
@@ -346,7 +347,7 @@ export const OPERATIONS = {
       const valid = residentIds.filter((id) => t.get('users', id)?.role === 'resident');
       t.notify(valid, {
         title: 'Recordatorio de pago',
-        body: 'Tienes cuotas de mantenimiento pendientes. Puedes pagar con Ecart Pay desde la app.',
+        body: 'Tienes pagos pendientes con el residencial. Puedes pagar con Ecart Pay desde la app.',
         kind: 'payment',
         link: '/pagos',
       });
@@ -447,7 +448,7 @@ export const OPERATIONS = {
           }
           if (record.paymentIds.length) {
             record.status = 'matched';
-            const periods = t.next.payments.filter((p) => record.paymentIds.includes(p.id)).map((p) => monthLabel(p.period));
+            const periods = t.next.payments.filter((p) => record.paymentIds.includes(p.id)).map(periodLabel);
             t.notify(t.unitResidents(unit.id), {
               title: 'Recibimos tu transferencia',
               body: `Se aplicó tu depósito de ${money(mv.amount)} a ${periods.join(', ')}.`,
@@ -479,7 +480,7 @@ export const OPERATIONS = {
       const rows = rowsFor(t, unitId, periods);
       const total = rows.reduce((sum, r) => sum + r.amount, 0);
       if (total > mv.amount)
-        throw new DomainError(`Los meses elegidos suman ${money(total)} y el depósito es de ${money(mv.amount)}.`, 409, 'amount_exceeded');
+        throw new DomainError(`Los cargos elegidos suman ${money(total)} y el depósito es de ${money(mv.amount)}.`, 409, 'amount_exceeded');
       const now = nowIso();
       const residentId = t.next.users.find((u) => u.role === 'resident' && u.unitId === unitId)?.id || null;
       const created = rows.map((row) =>
@@ -506,7 +507,7 @@ export const OPERATIONS = {
       });
       t.notify(t.unitResidents(unitId), {
         title: 'Recibimos tu transferencia',
-        body: `Se aplicó tu depósito de ${money(mv.amount)} a ${rows.map((r) => monthLabel(r.month)).join(', ')}.`,
+        body: `Se aplicó tu depósito de ${money(mv.amount)} a ${rows.map((r) => r.label).join(', ')}.`,
         kind: 'payment',
         link: '/pagos',
       });
@@ -598,7 +599,8 @@ export const OPERATIONS = {
       const blocked = debtRestriction(t.next, user.unitId, 'reservations');
       if (blocked) throw new DomainError(blocked, 403, 'debt_restricted');
       const am = t.next.settings.amenities.find((a) => a.id === input.amenityId);
-      if (!am) throw new DomainError('Elige un área válida.');
+      if (!am || am.archived) throw new DomainError('Elige un área válida.');
+      if (am.active === false) throw new DomainError(`${am.name} no está disponible para reservar por ahora.`, 409, 'amenity_paused');
       if (input.from >= input.to) throw new DomainError('La hora de fin debe ser posterior al inicio.');
       if (input.from < am.open || input.to > am.close) throw new DomainError(`${am.name} abre de ${am.open} a ${am.close}.`);
       if (input.guests > am.capacity) throw new DomainError(`${am.name} admite hasta ${am.capacity} personas.`);
@@ -789,6 +791,119 @@ export const OPERATIONS = {
     },
   },
 
+  // ---------- Áreas comunes y conceptos de cobro (administración) ----------
+  saveAmenity: {
+    roles: ADMIN,
+    run(t, _ctx, input) {
+      if (input.open >= input.close) throw new DomainError('La hora de cierre debe ser posterior a la de apertura.');
+      const list = t.next.settings.amenities || [];
+      const before = input.id && list.find((a) => a.id === input.id && !a.archived);
+      if (input.id && !before) throw notFoundError('El área');
+      const name = input.name.trim();
+      if (list.some((a) => !a.archived && a.id !== input.id && a.name.toLowerCase() === name.toLowerCase()))
+        throw new DomainError(`Ya existe un área llamada ${name}.`, 409, 'duplicate');
+      const am = {
+        ...before,
+        id: before?.id || uid('am_'),
+        name,
+        capacity: input.capacity,
+        open: input.open,
+        close: input.close,
+        deposit: input.deposit || 0,
+        description: input.description || '',
+        active: input.active !== false,
+      };
+      t.next.settings = { ...t.next.settings, amenities: before ? list.map((a) => (a.id === am.id ? am : a)) : [...list, am] };
+      t.audit({ action: before ? 'Área común actualizada' : 'Área común creada', target: am.name });
+      return am;
+    },
+  },
+  // Si el área tiene reservaciones pasadas se archiva (el historial conserva el nombre); si tiene próximas, no se puede eliminar.
+  deleteAmenity: {
+    roles: ADMIN,
+    run(t, _ctx, { id }) {
+      const list = t.next.settings.amenities || [];
+      const am = list.find((a) => a.id === id && !a.archived);
+      if (!am) throw notFoundError('El área');
+      const today = new Date().toISOString().slice(0, 10);
+      const used = t.next.reservations.filter((r) => r.amenityId === id && r.status !== 'cancelled');
+      const upcoming = used.filter((r) => r.date >= today);
+      if (upcoming.length)
+        throw new DomainError(
+          `${am.name} tiene ${upcoming.length} reservación(es) próximas. Cancélalas o pausa el área para que no se aparte más.`,
+          409,
+          'amenity_in_use',
+        );
+      t.next.settings = {
+        ...t.next.settings,
+        amenities: used.length
+          ? list.map((a) => (a.id === id ? { ...a, archived: true, active: false } : a))
+          : list.filter((a) => a.id !== id),
+      };
+      t.audit({ action: 'Área común eliminada', target: am.name });
+    },
+  },
+
+  saveCharge: {
+    roles: ADMIN,
+    run(t, _ctx, input) {
+      const list = t.next.settings.charges || [];
+      const before = input.id && list.find((c) => c.id === input.id && !c.archived);
+      if (input.id && !before) throw notFoundError('El concepto');
+      if (!(input.amount > 0)) throw new DomainError('El monto debe ser mayor a cero.');
+      if (input.kind === 'once' && !input.dueDate) throw new DomainError('Indica la fecha límite de pago.');
+      if (input.kind === 'monthly' && !input.from) throw new DomainError('Indica desde qué mes se cobra.');
+      if (input.kind === 'monthly' && input.to && input.to < input.from)
+        throw new DomainError('El mes final debe ser posterior al inicial.');
+      const unitIds = [...new Set(input.unitIds || [])];
+      if (unitIds.some((id) => !t.get('units', id))) throw new DomainError('Alguna de las casas elegidas no existe.');
+      const charge = {
+        ...before,
+        id: before?.id || uid('ch_'),
+        name: input.name.trim(),
+        amount: input.amount,
+        kind: input.kind,
+        ...(input.kind === 'once'
+          ? { dueDate: input.dueDate, from: undefined, to: undefined }
+          : { from: input.from, to: input.to || null, dueDate: undefined }),
+        unitIds,
+        createdAt: before?.createdAt || nowIso(),
+      };
+      const clean = Object.fromEntries(Object.entries(charge).filter(([, v]) => v !== undefined));
+      t.next.settings = { ...t.next.settings, charges: before ? list.map((c) => (c.id === clean.id ? clean : c)) : [...list, clean] };
+      if (!before) {
+        const who = t.next.users.filter((u) => u.role === 'resident' && chargeApplies(clean, u.unitId)).map((u) => u.id);
+        const when = clean.kind === 'once' ? `antes del ${clean.dueDate.split('-').reverse().join('/')}` : 'cada mes';
+        t.notify(who, {
+          title: `Nuevo cargo: ${clean.name}`,
+          body: `Administración agregó ${clean.name} por ${money(clean.amount)} a pagar ${when}. Ya aparece en tu estado de cuenta.`,
+          kind: 'payment',
+          link: '/pagos',
+        });
+      }
+      t.audit({
+        action: before ? 'Concepto de cobro actualizado' : 'Concepto de cobro creado',
+        target: `${clean.name} · ${money(clean.amount)}`,
+      });
+      return clean;
+    },
+  },
+  // Si ya hay pagos del concepto se archiva: deja de cobrarse, pero los pagos y los comprobantes en revisión se conservan.
+  deleteCharge: {
+    roles: ADMIN,
+    run(t, _ctx, { id }) {
+      const list = t.next.settings.charges || [];
+      const c = list.find((x) => x.id === id && !x.archived);
+      if (!c) throw notFoundError('El concepto');
+      const paid = t.next.payments.some((p) => p.chargeId === id && p.status !== 'rejected');
+      t.next.settings = {
+        ...t.next.settings,
+        charges: paid ? list.map((x) => (x.id === id ? { ...x, archived: true } : x)) : list.filter((x) => x.id !== id),
+      };
+      t.audit({ action: 'Concepto de cobro eliminado', target: c.name });
+    },
+  },
+
   updateSettings: {
     roles: ADMIN,
     run(t, _ctx, data) {
@@ -802,7 +917,6 @@ export const OPERATIONS = {
           'lateFeeGraceDays',
           'restrictions',
           'bank',
-          'amenities',
           'generalProviders',
           'cover',
           'gate',

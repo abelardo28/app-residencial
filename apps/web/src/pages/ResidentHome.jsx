@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { QrCode, Wallet, Megaphone, Package, DoorOpen, CalendarDays, ArrowRight, Vote, Wrench, MessageCircle } from 'lucide-react';
 import { useStore, unitLabel } from '../data/store';
 import { gateSettings, passStatus } from '@residencial/shared';
-import { money, timeAgo, fmtTime, monthLabel } from '../lib/utils';
+import { money, timeAgo, fmtTime } from '../lib/utils';
 import { Badge, Button, Card, CardHead, Empty, Stat } from '../components/ui';
 import { barrierState } from '../components/GateControls';
 import { ledger } from '@residencial/shared';
@@ -34,7 +34,7 @@ export default function ResidentHome() {
 
       {rows.some((r) => r.state === 'overdue') && (
         <Link to="/pagos" className="banner bad" style={{ marginBottom: 16, textDecoration: 'none' }}>
-          <Wallet size={18} /> Tienes {owed.length} cuota(s) pendiente(s) por {money(owed.reduce((s, r) => s + r.amount, 0))}.{' '}
+          <Wallet size={18} /> Tienes {owed.length} pago(s) pendiente(s) por {money(owed.reduce((s, r) => s + r.amount, 0))}.{' '}
           <b style={{ marginLeft: 'auto' }}>Pagar ahora</b>
         </Link>
       )}
@@ -66,7 +66,7 @@ export default function ResidentHome() {
             icon={<Wallet size={15} />}
             label="Saldo"
             value={money(owed.reduce((s, r) => s + r.amount, 0))}
-            sub={owed.length ? owed.map((o) => monthLabel(o.month)).join(', ') : 'Al corriente'}
+            sub={owed.length ? owed.map((o) => o.label).join(', ') : 'Al corriente'}
           />
         </Link>
         <Link to="/paquetes" style={{ textDecoration: 'none' }}>

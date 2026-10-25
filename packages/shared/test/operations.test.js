@@ -89,10 +89,11 @@ describe('estado de cuenta', () => {
     const months = lastMonths(4);
     const rows = ledger(db, 'u3');
     assert.deepEqual(
-      rows.map((r) => r.month),
+      rows.filter((r) => !r.chargeId).map((r) => r.month),
       months,
     );
-    assert.ok(payableMonths(db, 'u3').every((m) => months.includes(m)));
+    // Además de las cuotas, el concepto de ejemplo del residencial
+    assert.ok(payableMonths(db, 'u3').every((m) => months.includes(m) || m === 'ch_imper'));
   });
 });
 

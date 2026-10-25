@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { CreditCard, Landmark, Banknote, Check, X, FileText, Bell, Receipt, Lock, Plus, Copy, Ban } from 'lucide-react';
 import { useStore, unitLabel, userName } from '../data/store';
-import { monthLabel, money, fmtDateTime, fileToAttachment, monthKey } from '../lib/utils';
-import { debtOf, debtRestriction, ledger, unitReference } from '@residencial/shared';
+import { monthLabel, money, fmtDate, fmtDateTime, fileToAttachment, monthKey } from '../lib/utils';
+import { debtOf, debtRestriction, ledger, paymentMonth, periodLabel, unitReference } from '@residencial/shared';
 import { Attachment, Badge, Button, Card, CardHead, Empty, Field, FileDrop, Modal, PageHead, Stat, Tabs } from '../components/ui';
 import Reconciliation from './Reconciliation';
+import Charges from '../components/Charges';
 
 const METHOD = { ecartpay: 'Ecart Pay', transfer: 'Transferencia', cash: 'Efectivo' };
 const STATUS = { approved: ['Aprobado', 'ok'], pending: ['En revisión', 'warn'], rejected: ['Rechazado', 'bad'] };
@@ -31,7 +32,7 @@ function ResidentPayments() {
   return (
     <>
       <PageHead
-        title="Pagos de mantenimiento"
+        title="Pagos"
         subtitle={`Cuota mensual ${money(db.settings.monthlyFee)} · vence el día ${db.settings.dueDay} de cada mes`}
         fab={
           owed.length
@@ -51,13 +52,13 @@ function ResidentPayments() {
         <Stat
           label="Saldo pendiente"
           value={money(owedTotal)}
-          sub={owed.length ? `${owed.length} mes(es)${owed.some((r) => r.lateFee) ? ' · incluye recargos' : ''}` : 'Estás al corriente'}
+          sub={owed.length ? `${owed.length} cargo(s)${owed.some((r) => r.lateFee) ? ' · incluye recargos' : ''}` : 'Estás al corriente'}
         />
         <Stat label="En revisión" value={rows.filter((r) => r.state === 'review').length} sub="Comprobantes enviados" />
         <Stat
           label="Último pago"
           value={mine.find((p) => p.status === 'approved') ? money(mine.find((p) => p.status === 'approved').amount) : '—'}
-          sub={mine.find((p) => p.status === 'approved') ? monthLabel(mine.find((p) => p.status === 'approved').period) : ''}
+          sub={mine.find((p) => p.status === 'approved') ? periodLabel(mine.find((p) => p.status === 'approved')) : ''}
         />
       </div>
       {restricted && (
@@ -73,11 +74,12 @@ function ResidentPayments() {
               .slice()
               .reverse()
               .map((r) => (
-                <div key={r.month} className="list-item">
+                <div key={r.key} className="list-item">
                   <div className="grow">
-                    <div className="title">{monthLabel(r.month)}</div>
+                    <div className="title">{r.label}</div>
                     <div className="faint">
                       {money(r.amount)}
+                      {r.chargeId && r.state !== 'paid' && ` · vence el ${fmtDate(r.due + 'T12:00')}`}
                       {r.lateFee > 0 && ` · incluye recargo de ${money(r.lateFee)}`}
                       {r.waived && r.state === 'overdue' && ' · recargo condonado'}
                     </div>
@@ -98,7 +100,7 @@ function ResidentPayments() {
                   <Receipt size={16} />
                 </div>
                 <div className="grow">
-                  <div className="title">{monthLabel(p.period)}</div>
+                  <div className="title">{periodLabel(p)}</div>
                   <div className="faint">
                     {METHOD[p.method]} · {fmtDateTime(p.createdAt)}
                   </div>
@@ -169,14 +171,14 @@ function TransferCard() {
 
 function PayModal({ owed, onClose }) {
   const { db, me, actions, toast } = useStore();
-  const [periods, setPeriods] = useState(owed.map((o) => o.month).slice(0, 1));
+  const [periods, setPeriods] = useState(owed.map((o) => o.key).slice(0, 1));
   const [method, setMethod] = useState('ecartpay');
   const [receipt, setReceipt] = useState(null);
   const [reference, setReference] = useState('');
   const [checkout, setCheckout] = useState(null);
   const [busy, setBusy] = useState(false);
-  const total = sumAmount(owed.filter((o) => periods.includes(o.month)));
-  const toggle = (m) => setPeriods((p) => (p.includes(m) ? p.filter((x) => x !== m) : [...p, m].sort()));
+  const total = sumAmount(owed.filter((o) => periods.includes(o.key)));
+  const toggle = (k) => setPeriods((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
 
   async function submit() {
     if (!periods.length) return;
@@ -222,7 +224,7 @@ function PayModal({ owed, onClose }) {
 
   return (
     <Modal
-      title="Pagar mantenimiento"
+      title="Pagar"
       onClose={onClose}
       footer={
         <>
@@ -236,16 +238,11 @@ function PayModal({ owed, onClose }) {
       }
     >
       <div className="stack">
-        <Field label="Meses a pagar">
+        <Field label="Qué vas a pagar">
           <div className="chips">
             {owed.map((o) => (
-              <button
-                key={o.month}
-                type="button"
-                className={`chip ${periods.includes(o.month) ? 'on' : ''}`}
-                onClick={() => toggle(o.month)}
-              >
-                {monthLabel(o.month)} · {money(o.amount)}
+              <button key={o.key} type="button" className={`chip ${periods.includes(o.key) ? 'on' : ''}`} onClick={() => toggle(o.key)}>
+                {o.label} · {money(o.amount)}
               </button>
             ))}
           </div>
@@ -373,7 +370,7 @@ function PaymentDetail({ p, onClose, review }) {
   const isPending = p.status === 'pending';
   return (
     <Modal
-      title={`${monthLabel(p.period)} · ${money(p.amount)}`}
+      title={`${periodLabel(p)} · ${money(p.amount)}`}
       onClose={onClose}
       footer={
         review && isPending ? (
@@ -470,7 +467,7 @@ function AdminPayments() {
     .filter((x) => x.owed.length);
   const [waiveFor, setWaiveFor] = useState(null);
   const unmatched = (db.bankMovements || []).filter((m) => m.status === 'unmatched');
-  const thisMonth = db.payments.filter((p) => p.status === 'approved' && p.period === monthKey());
+  const thisMonth = db.payments.filter((p) => p.status === 'approved' && paymentMonth(p) === monthKey());
 
   return (
     <>
@@ -490,6 +487,7 @@ function AdminPayments() {
             { value: 'bank', label: 'Conciliación', count: unmatched.length },
             { value: 'debt', label: 'Morosidad', count: debtors.length },
             { value: 'all', label: 'Historial' },
+            { value: 'charges', label: 'Conceptos', count: (db.settings.charges || []).filter((c) => !c.archived).length || undefined },
           ]}
         />
       </div>
@@ -512,7 +510,7 @@ function AdminPayments() {
                     {userName(db, p.residentId)} · {unitLabel(db, p.unitId)}
                   </div>
                   <div className="faint">
-                    {monthLabel(p.period)} · {METHOD[p.method]} · {fmtDateTime(p.createdAt)}
+                    {periodLabel(p)} · {METHOD[p.method]} · {fmtDateTime(p.createdAt)}
                   </div>
                 </div>
                 <b>{money(p.amount)}</b>
@@ -526,6 +524,8 @@ function AdminPayments() {
       )}
 
       {tab === 'bank' && <Reconciliation />}
+
+      {tab === 'charges' && <Charges />}
 
       {tab === 'debt' && (
         <Card>
@@ -551,7 +551,7 @@ function AdminPayments() {
                     {unitLabel(db, r.unitId)} · {r.name}
                   </div>
                   <div className="faint">
-                    {owed.map((o) => monthLabel(o.month)).join(', ')} · Ref. <span className="mono">{unitReference(db, r.unitId)}</span>
+                    {owed.map((o) => o.label).join(', ')} · Ref. <span className="mono">{unitReference(db, r.unitId)}</span>
                   </div>
                   {owed.some((o) => o.lateFee) && <div className="faint">Recargos: {money(owed.reduce((s, o) => s + o.lateFee, 0))}</div>}
                 </div>
@@ -595,7 +595,7 @@ function AdminPayments() {
                       <span>{money(p.amount)}</span>
                     </div>
                     <div className="faint">
-                      {monthLabel(p.period)} · {METHOD[p.method]} · {userName(db, p.residentId)}
+                      {periodLabel(p)} · {METHOD[p.method]} · {userName(db, p.residentId)}
                     </div>
                     <div style={{ marginTop: 4 }}>
                       <Badge tone={STATUS[p.status][1]}>{STATUS[p.status][0]}</Badge>
@@ -609,7 +609,7 @@ function AdminPayments() {
               <thead>
                 <tr>
                   <th>Casa</th>
-                  <th>Periodo</th>
+                  <th>Concepto</th>
                   <th>Método</th>
                   <th>Monto</th>
                   <th>Estado</th>
@@ -625,7 +625,7 @@ function AdminPayments() {
                         {unitLabel(db, p.unitId)}
                         <div className="faint">{userName(db, p.residentId)}</div>
                       </td>
-                      <td>{monthLabel(p.period)}</td>
+                      <td>{periodLabel(p)}</td>
                       <td>{METHOD[p.method]}</td>
                       <td>{money(p.amount)}</td>
                       <td>
@@ -653,7 +653,7 @@ function AdminPayments() {
 
 function CashModal({ r, owed, onClose }) {
   const { actions, toast } = useStore();
-  const [periods, setPeriods] = useState(owed.map((o) => o.month));
+  const [periods, setPeriods] = useState(owed.map((o) => o.key));
   const [reference, setReference] = useState('');
   return (
     <Modal
@@ -681,17 +681,17 @@ function CashModal({ r, owed, onClose }) {
         <div className="chips">
           {owed.map((o) => (
             <button
-              key={o.month}
-              className={`chip ${periods.includes(o.month) ? 'on' : ''}`}
-              onClick={() => setPeriods((p) => (p.includes(o.month) ? p.filter((x) => x !== o.month) : [...p, o.month]))}
+              key={o.key}
+              className={`chip ${periods.includes(o.key) ? 'on' : ''}`}
+              onClick={() => setPeriods((p) => (p.includes(o.key) ? p.filter((x) => x !== o.key) : [...p, o.key]))}
             >
-              {monthLabel(o.month)} · {money(o.amount)}
+              {o.label} · {money(o.amount)}
             </button>
           ))}
         </div>
         <div className="row between">
           <span className="muted">Total</span>
-          <b>{money(sumAmount(owed.filter((o) => periods.includes(o.month))))}</b>
+          <b>{money(sumAmount(owed.filter((o) => periods.includes(o.key))))}</b>
         </div>
         <Field label="Folio del recibo">
           <input className="input" value={reference} onChange={(e) => setReference(e.target.value)} />

@@ -1,7 +1,7 @@
 // Asistente de WhatsApp: los residentes generan pases, consultan su saldo y leen avisos sin instalar la APP.
 // Es una conversación por menús con números (funciona igual en cualquier teléfono). La API la usa con
 // WhatsApp Cloud API y el modo demo con el simulador; las acciones pasan por las mismas operaciones que la APP.
-import { fmtDate, fmtTime, money, monthLabel } from './format.js';
+import { fmtDate, fmtTime, money } from './format.js';
 import { debtOf, payableRows, unitReference } from './ledger.js';
 
 /** Minutos que se recuerda una conversación a medias (p. ej. "¿cómo se llama tu visita?"). */
@@ -139,9 +139,7 @@ function balance(tenant, user, links) {
   const total = owed.reduce((s, r) => s + r.amount, 0);
   const { bank } = tenant.settings;
   if (!owed.length) return 'Estás al corriente. ¡Gracias por tu pago!';
-  const lines = owed.map(
-    (r) => `• ${monthLabel(r.month)}: ${money(r.amount)}${r.lateFee ? ` (incluye recargo de ${money(r.lateFee)})` : ''}`,
-  );
+  const lines = owed.map((r) => `• ${r.label}: ${money(r.amount)}${r.lateFee ? ` (incluye recargo de ${money(r.lateFee)})` : ''}`);
   return [
     `Tu saldo es de *${money(total)}*${debt.months ? `, con ${debt.months} mes(es) vencido(s)` : ''}.`,
     ...lines,

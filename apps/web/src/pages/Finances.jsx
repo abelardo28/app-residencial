@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useStore } from '../data/store';
 import { money, monthKey, monthLabel, fmtDate } from '../lib/utils';
+import { paymentMonth } from '@residencial/shared';
 import { Button, Card, CardHead, Field, Modal, PageHead, Stat, Empty } from '../components/ui';
 
 const CATS = ['Seguridad', 'Mantenimiento', 'Servicios', 'Administración', 'Fondo de reserva', 'Otro'];
@@ -10,7 +11,7 @@ export default function Finances() {
   const { db, me } = useStore();
   const [adding, setAdding] = useState(false);
   const m = monthKey();
-  const income = db.payments.filter((p) => p.status === 'approved' && p.period === m).reduce((s, p) => s + p.amount, 0);
+  const income = db.payments.filter((p) => p.status === 'approved' && paymentMonth(p) === m).reduce((s, p) => s + p.amount, 0);
   const monthExp = db.expenses.filter((e) => e.date.slice(0, 7) === m);
   const spent = monthExp.reduce((s, e) => s + e.amount, 0);
   const byCat = CATS.map((c) => ({ c, v: monthExp.filter((e) => e.category === c).reduce((s, e) => s + e.amount, 0) })).filter((x) => x.v);

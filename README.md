@@ -83,6 +83,7 @@ La cámara (escáner QR y foto de placa) sólo funciona en `localhost` o con HTT
   - **Efectivo**: el residente lo reporta, o el administrador lo registra directamente.
 - Los administradores reciben un aviso por cada comprobante. Al **aprobar o rechazar** (con motivo), el residente recibe la notificación.
 - Morosidad por casa, recordatorios de pago individuales o masivos, y métricas de cobranza.
+- **Conceptos de cobro** además de la cuota (_Pagos → Conceptos_): administración agrega, edita o elimina cargos como una cuota extraordinaria, una multa o el fondo de reserva. Cada uno se cobra **una vez** (con fecha límite) o **cada mes** (con mes de inicio y, si quiere, de fin), a todas las casas o sólo a algunas. El residente recibe un aviso, lo ve en su estado de cuenta y lo paga igual que la cuota (Ecart Pay, transferencia, efectivo o conciliación bancaria). Si un concepto ya tiene pagos, al eliminarlo deja de cobrarse pero los pagos se conservan.
 
 ### Cobranza automática
 
@@ -94,7 +95,7 @@ La cámara (escáner QR y foto de placa) sólo funciona en `localhost` o con HTT
      Subir el mismo archivo otra vez no duplica pagos. Hay un botón para descargar un CSV de ejemplo con los adeudos de la demo.
 - **Recargos**: monto fijo por mes vencido con días de tolerancia configurables. Administración puede **condonar** el recargo de un mes (queda en la auditoría).
 - **Restricción por adeudo** (opcional, según el reglamento): con N meses vencidos la casa no puede reservar áreas comunes ni crear pases recurrentes. El acceso a la vivienda y los pases de una sola visita nunca se bloquean.
-- Las reglas están en `packages/shared/src/ledger.js` (estado de cuenta, recargos, referencias), `bank.js` (lectura del CSV) y las operaciones `reconcileBank`, `assignBankMovement`, `ignoreBankMovement` y `waiveLateFee`.
+- Las reglas están en `packages/shared/src/ledger.js` (estado de cuenta, recargos, conceptos, referencias), `bank.js` (lectura del CSV) y las operaciones `reconcileBank`, `assignBankMovement`, `ignoreBankMovement` y `waiveLateFee`.
 
 ### WhatsApp sin descargar la app
 
@@ -142,6 +143,11 @@ npm start
 - Cada equipo tiene su token; si se pierde la computadora, «Token» genera uno nuevo y el anterior deja de funcionar.
 
 Para dejarlo corriendo al encender la computadora, crea un servicio de systemd con `ExecStart=/usr/bin/node /opt/gate-agent/src/index.js` y `EnvironmentFile=/opt/gate-agent/.env`.
+
+### Áreas comunes
+
+- Administración agrega, edita o elimina las áreas que se pueden reservar (_Reservaciones → Nueva área_ o el lápiz de cada una): nombre, horario, capacidad, depósito y reglas.
+- Un área se puede **pausar** (por mantenimiento, por ejemplo): los residentes dejan de verla y las reservaciones ya hechas se mantienen. No se puede eliminar un área con reservaciones próximas; si tuvo reservaciones pasadas, se archiva para conservar el historial.
 
 ### Avisos y notificaciones
 

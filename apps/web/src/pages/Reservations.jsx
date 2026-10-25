@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, Plus, Users } from 'lucide-react';
+import { CalendarDays, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { useStore, unitLabel, userName } from '../data/store';
 import { money } from '../lib/utils';
 import { debtRestriction } from '@residencial/shared';
@@ -14,22 +14,47 @@ export default function Reservations() {
     .sort((a, b) => (a.date + a.from).localeCompare(b.date + b.from));
   const mine = me.role === 'admin' ? upcoming : upcoming.filter((r) => r.unitId === me.unitId);
   const blocked = me.role === 'resident' ? debtRestriction(db, me.unitId, 'reservations') : null;
+  const isAdmin = me.role === 'admin';
+  const [editing, setEditing] = useState(null);
+  const amenities = db.settings.amenities.filter((a) => !a.archived && (isAdmin || a.active !== false));
 
   return (
     <>
       <PageHead
         title={me.role === 'admin' ? 'Reservaciones' : 'Reservar áreas comunes'}
         subtitle="Consulta la disponibilidad y aparta en segundos, sin choques de horario."
-      />
+      >
+        {isAdmin && (
+          <Button variant="primary" onClick={() => setEditing({})}>
+            <Plus size={16} /> Nueva área
+          </Button>
+        )}
+      </PageHead>
       {blocked && (
         <div className="banner warn" style={{ marginBottom: 16 }}>
           {blocked}
         </div>
       )}
       <div className="grid g4" style={{ marginBottom: 16 }}>
-        {db.settings.amenities.map((a) => (
+        {amenities.length === 0 && (
+          <Card>
+            <Empty icon={<CalendarDays />}>
+              {isAdmin ? 'Agrega las áreas que los residentes pueden apartar.' : 'Aún no hay áreas para reservar.'}
+            </Empty>
+          </Card>
+        )}
+        {amenities.map((a) => (
           <Card key={a.id} className="stack" style={{ gap: 6 }}>
-            <h3>{a.name}</h3>
+            <div className="row between" style={{ flexWrap: 'nowrap' }}>
+              <h3>{a.name}</h3>
+              {isAdmin && (
+                <Button size="sm" variant="ghost" className="icon-btn" aria-label={`Editar ${a.name}`} onClick={() => setEditing(a)}>
+                  <Pencil size={15} />
+                </Button>
+              )}
+            </div>
+            {a.active === false && <Badge tone="warn">Pausada</Badge>}
+            {a.description && <div className="faint">{a.description}</div>}
             <div className="faint">
               {a.open}–{a.close} · <Users size={12} /> {a.capacity}
             </div>
@@ -68,6 +93,7 @@ export default function Reservations() {
         </div>
       </Card>
       {creating && <CreateReservation amenityId={creating} onClose={() => setCreating(null)} />}
+      {editing && <AmenityModal amenity={editing} onClose={() => setEditing(null)} />}
     </>
   );
 }
@@ -120,7 +146,7 @@ function CreateReservation({ amenityId, onClose }) {
         <Chips
           value={f.amenityId}
           onChange={set('amenityId')}
-          options={db.settings.amenities.map((a) => ({ value: a.id, label: a.name }))}
+          options={db.settings.amenities.filter((a) => !a.archived && a.active !== false).map((a) => ({ value: a.id, label: a.name }))}
         />
         <Field label="Fecha">
           <input type="date" className="input" value={f.date} min={new Date().toISOString().slice(0, 10)} onChange={set('date')} />
@@ -138,6 +164,128 @@ function CreateReservation({ amenityId, onClose }) {
           <input type="number" className="input" min={1} value={f.guests} onChange={set('guests')} />
         </Field>
         {am.deposit > 0 && <div className="banner info">Esta área requiere un depósito de {money(am.deposit)} reembolsable.</div>}
+        {err && <div className="banner bad">{err}</div>}
+      </div>
+    </Modal>
+  );
+}
+
+function AmenityModal({ amenity, onClose }) {
+  const { actions, toast } = useStore();
+  const isNew = !amenity.id;
+  const [f, setF] = useState({
+    name: amenity.name || '',
+    capacity: amenity.capacity ?? 10,
+    open: amenity.open || '09:00',
+    close: amenity.close || '21:00',
+    deposit: amenity.deposit ?? 0,
+    description: amenity.description || '',
+    active: amenity.active !== false,
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const set = (k) => (v) => setF((x) => ({ ...x, [k]: v?.target ? v.target.value : v }));
+
+  async function run(fn, done) {
+    setErr('');
+    setBusy(true);
+    try {
+      await fn();
+      toast(...done);
+      onClose();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const save = () => {
+    if (!f.name.trim()) return setErr('Escribe el nombre del área.');
+    if (f.open >= f.close) return setErr('La hora de cierre debe ser posterior a la de apertura.');
+    if (!(Number(f.capacity) >= 1)) return setErr('La capacidad debe ser de al menos 1 persona.');
+    run(
+      () =>
+        actions.saveAmenity({
+          ...(isNew ? {} : { id: amenity.id }),
+          name: f.name.trim(),
+          capacity: Number(f.capacity),
+          open: f.open,
+          close: f.close,
+          deposit: Number(f.deposit) || 0,
+          description: f.description.trim(),
+          active: f.active,
+        }),
+      [isNew ? 'Área agregada' : 'Área actualizada', f.name.trim()],
+    );
+  };
+
+  return (
+    <Modal
+      title={isNew ? 'Nueva área común' : `Editar ${amenity.name}`}
+      onClose={onClose}
+      footer={
+        <>
+          {!isNew && (
+            <Button
+              variant="ghost"
+              className="danger"
+              disabled={busy}
+              style={{ marginRight: 'auto' }}
+              onClick={() =>
+                window.confirm(`¿Eliminar ${amenity.name}? Ya no se podrá reservar.`) &&
+                run(() => actions.deleteAmenity(amenity.id), ['Área eliminada', amenity.name])
+              }
+            >
+              <Trash2 size={15} /> Eliminar
+            </Button>
+          )}
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="primary" disabled={busy} onClick={save}>
+            {isNew ? 'Agregar' : 'Guardar'}
+          </Button>
+        </>
+      }
+    >
+      <div className="stack">
+        <Field label="Nombre">
+          <input className="input" value={f.name} onChange={set('name')} placeholder="Casa club, asadores, cancha…" />
+        </Field>
+        <div className="grid g2">
+          <Field label="Abre">
+            <input type="time" className="input" value={f.open} onChange={set('open')} />
+          </Field>
+          <Field label="Cierra">
+            <input type="time" className="input" value={f.close} onChange={set('close')} />
+          </Field>
+        </div>
+        <div className="grid g2">
+          <Field label="Capacidad (personas)">
+            <input type="number" className="input" min={1} value={f.capacity} onChange={set('capacity')} />
+          </Field>
+          <Field label="Depósito reembolsable">
+            <input type="number" className="input" min={0} value={f.deposit} onChange={set('deposit')} />
+          </Field>
+        </div>
+        <Field label="Reglas o descripción (opcional)">
+          <textarea
+            className="input"
+            rows={2}
+            value={f.description}
+            onChange={set('description')}
+            placeholder="Ej. sin música después de las 22:00"
+          />
+        </Field>
+        {!isNew && (
+          <label className="check">
+            <input type="checkbox" checked={!f.active} onChange={(e) => set('active')(!e.target.checked)} />
+            <span>
+              <b>Pausar reservaciones</b>
+              <span className="faint">Los residentes no la verán mientras esté pausada; las reservaciones ya hechas se mantienen.</span>
+            </span>
+          </label>
+        )}
         {err && <div className="banner bad">{err}</div>}
       </div>
     </Modal>

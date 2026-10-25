@@ -6,8 +6,9 @@ import { parse } from '../../lib/validate.js';
 import { OPERATION_SCHEMAS } from './schemas.js';
 
 const MB = 1024 * 1024;
-const period = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
-const CheckoutBody = z.object({ periods: z.array(period).min(1).max(24) });
+// Lo que se paga: un mes de cuota (AAAA-MM) o un concepto (ch_… o ch_…@AAAA-MM)
+const period = z.string().regex(/^(\d{4}-(0[1-9]|1[0-2])|[\w-]{1,64}(@\d{4}-(0[1-9]|1[0-2]))?)$/);
+const CheckoutBody = z.object({ periods: z.array(period).min(1).max(48) });
 const CardBody = z.object({ saveCard: z.boolean().default(false) });
 const TransferBody = z.object({ reference: z.string().trim().max(80).default(''), receipt: z.string().max(5 * MB) });
 const AutopayBody = z.object({ enabled: z.boolean() });

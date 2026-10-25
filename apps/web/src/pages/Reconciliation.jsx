@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Check, Download, FileSpreadsheet, Landmark, Link2, Trash2 } from 'lucide-react';
 import { debtOf, parseBankStatement, payableRows, unitReference } from '@residencial/shared';
 import { useStore, unitLabel } from '../data/store';
-import { fmtDate, money, monthLabel } from '../lib/utils';
+import { fmtDate, money } from '../lib/utils';
 import { Badge, Button, Card, CardHead, Empty, Field, FileDrop, Modal } from '../components/ui';
 
 const MV_STATUS = { matched: ['Aplicado', 'ok'], unmatched: ['Por asignar', 'warn'], ignored: ['Descartado', ''] };
@@ -148,7 +148,7 @@ function AssignModal({ mv, onClose }) {
   const [unitId, setUnitId] = useState(mv.unitId || '');
   const rows = unitId ? payableRows(db, unitId) : [];
   const [periods, setPeriods] = useState([]);
-  const total = rows.filter((r) => periods.includes(r.month)).reduce((s, r) => s + r.amount, 0);
+  const total = rows.filter((r) => periods.includes(r.key)).reduce((s, r) => s + r.amount, 0);
   const pickUnit = (id) => {
     setUnitId(id);
     setPeriods([]);
@@ -196,19 +196,19 @@ function AssignModal({ mv, onClose }) {
           </select>
         </Field>
         {unitId && (
-          <Field label="Meses que cubre">
+          <Field label="Qué cubre">
             {rows.length === 0 ? (
-              <div className="faint">Esta casa no tiene meses por pagar.</div>
+              <div className="faint">Esta casa no tiene nada por pagar.</div>
             ) : (
               <div className="chips">
                 {rows.map((r) => (
                   <button
-                    key={r.month}
+                    key={r.key}
                     type="button"
-                    className={`chip ${periods.includes(r.month) ? 'on' : ''}`}
-                    onClick={() => setPeriods((p) => (p.includes(r.month) ? p.filter((x) => x !== r.month) : [...p, r.month]))}
+                    className={`chip ${periods.includes(r.key) ? 'on' : ''}`}
+                    onClick={() => setPeriods((p) => (p.includes(r.key) ? p.filter((x) => x !== r.key) : [...p, r.key]))}
                   >
-                    {monthLabel(r.month)} · {money(r.amount)}
+                    {r.label} · {money(r.amount)}
                   </button>
                 ))}
               </div>
@@ -217,8 +217,7 @@ function AssignModal({ mv, onClose }) {
         )}
         {total > mv.amount && (
           <div className="banner warn">
-            Los meses elegidos suman {money(total)} y el depósito es de {money(mv.amount)}. Elige menos meses o condona el recargo en
-            Morosidad.
+            Lo elegido suma {money(total)} y el depósito es de {money(mv.amount)}. Elige menos cargos o condona el recargo en Morosidad.
           </div>
         )}
         {periods.length > 0 && total < mv.amount && (
@@ -234,7 +233,7 @@ function downloadSample(db) {
   const fmt = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
   const today = fmt(new Date());
   const residents = db.users.filter((u) => u.role === 'resident');
-  const debtors = residents.map((r) => ({ r, debt: debtOf(db, r.unitId) })).filter((x) => x.debt.months);
+  const debtors = residents.map((r) => ({ r, debt: debtOf(db, r.unitId) })).filter((x) => x.debt.rows.length);
   const lines = ['Estado de cuenta - movimientos', 'Fecha;Concepto;Referencia;Cargo;Abono;Saldo'];
   debtors.slice(0, 2).forEach(({ r, debt }) => {
     lines.push(`${today};SPEI RECIBIDO ${r.name.toUpperCase()};${unitReference(db, r.unitId)};;${debt.amount.toFixed(2)};`);

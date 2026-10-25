@@ -29,7 +29,9 @@ const forResident = (tenant, me) => {
     accessLogs: tenant.accessLogs.filter((a) => mine(a) || a.kind === 'general').map((a) => (mine(a) ? a : omit(a, ['photo']))),
     // Los pagos de otras casas sólo alimentan los totales de transparencia
     payments: tenant.payments.map((p) =>
-      mine(p) ? p : { id: p.id, unitId: null, period: p.period, amount: p.amount, status: p.status, createdAt: p.createdAt },
+      mine(p)
+        ? p
+        : { id: p.id, unitId: null, period: p.period, month: p.month, amount: p.amount, status: p.status, createdAt: p.createdAt },
     ),
     notices: tenant.notices.filter(seesNotice).map((n) => {
       const readBy = n.readBy || [];

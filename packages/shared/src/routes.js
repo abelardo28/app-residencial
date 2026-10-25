@@ -52,6 +52,10 @@ export const OPERATION_ROUTES = {
 
   updateUser: { method: 'PATCH', path: '/users/:id', args: (id, data) => ({ id, ...data }) },
   updateSettings: { method: 'PATCH', path: '/settings', args: same },
+  saveAmenity: { method: 'POST', path: '/amenities', args: same },
+  deleteAmenity: { method: 'DELETE', path: '/amenities/:id', args: one('id') },
+  saveCharge: { method: 'POST', path: '/charges', args: same },
+  deleteCharge: { method: 'DELETE', path: '/charges/:id', args: one('id') },
   setWhatsappAlerts: { method: 'POST', path: '/whatsapp/alerts', args: one('enabled') },
 
   // Caseta física (las operaciones de los equipos tienen sus propias rutas en /devices)

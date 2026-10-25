@@ -3,7 +3,7 @@ import { Wallet, DoorOpen, Wrench, Siren, ArrowRight, Megaphone, TrendingUp } fr
 import { useStore, unitLabel, userName } from '../data/store';
 import { money, monthKey, lastMonths, monthLabel, timeAgo, fmtTime } from '../lib/utils';
 import { Badge, Button, Card, CardHead, Empty, Stat } from '../components/ui';
-import { ledger } from '@residencial/shared';
+import { ledger, paymentMonth, periodLabel } from '@residencial/shared';
 
 export default function AdminHome() {
   const { db, actions, toast } = useStore();
@@ -15,7 +15,7 @@ export default function AdminHome() {
   const sos = db.sos.filter((s) => s.status === 'active');
   const months = lastMonths(6);
   const collected = months.map((m) =>
-    db.payments.filter((p) => p.period === m && p.status === 'approved').reduce((s, p) => s + p.amount, 0),
+    db.payments.filter((p) => paymentMonth(p) === m && p.status === 'approved').reduce((s, p) => s + p.amount, 0),
   );
   const expected = residents.length * db.settings.monthlyFee;
 
@@ -115,7 +115,7 @@ export default function AdminHome() {
                     {unitLabel(db, p.unitId)} · {userName(db, p.residentId)}
                   </div>
                   <div className="faint">
-                    {monthLabel(p.period)} · {timeAgo(p.createdAt)}
+                    {periodLabel(p)} · {timeAgo(p.createdAt)}
                   </div>
                 </div>
                 <b>{money(p.amount)}</b>

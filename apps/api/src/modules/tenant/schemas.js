@@ -11,6 +11,9 @@ const isoDate = z.iso.datetime({ offset: true });
 const day = z.iso.date();
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora HH:MM');
 const period = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Periodo AAAA-MM');
+/** Lo que se paga: un mes de cuota (AAAA-MM) o un concepto (ch_… o ch_…@AAAA-MM). */
+const payable = z.string().regex(/^(\d{4}-(0[1-9]|1[0-2])|[\w-]{1,64}(@\d{4}-(0[1-9]|1[0-2]))?)$/, 'Periodo inválido');
+const payables = z.array(payable).min(1).max(48);
 const money = z.number().nonnegative().max(10_000_000);
 /** Imagen o archivo como data URL (las fotos se comprimen en la APP antes de subirlas). */
 const dataUrl = (maxMb) =>
@@ -67,14 +70,14 @@ export const OPERATION_SCHEMAS = {
   generalAccess: z.object({ provider: requiredText(80), plate: text(12).optional(), photo, notes: text(300).optional() }),
 
   submitPayment: z.object({
-    periods: z.array(period).min(1).max(24),
+    periods: payables,
     method: z.enum(['transfer', 'cash']), // los pagos con Ecart Pay sólo los registra el servidor
     receipt: attachment.nullish(),
     reference: text(80).optional(),
     notes: text(300).optional(),
   }),
   reviewPayment: z.object({ id, status: z.enum(['approved', 'rejected']), note: text(300).optional() }),
-  registerCashPayment: z.object({ residentId: id, periods: z.array(period).min(1).max(24), reference: text(80).optional() }),
+  registerCashPayment: z.object({ residentId: id, periods: payables, reference: text(80).optional() }),
   sendReminder: z.object({ residentIds: z.array(id).min(1).max(2000) }),
 
   waiveLateFee: z.object({ unitId: id, period }),
@@ -92,7 +95,7 @@ export const OPERATION_SCHEMAS = {
       .min(1)
       .max(1000),
   }),
-  assignBankMovement: z.object({ id, unitId: id, periods: z.array(period).min(1).max(24) }),
+  assignBankMovement: z.object({ id, unitId: id, periods: payables }),
   ignoreBankMovement: byId,
 
   createNotice: z.object({
@@ -173,12 +176,6 @@ export const OPERATION_SCHEMAS = {
       })
       .optional(),
     bank: z.object({ name: text(80), clabe: text(40), holder: text(120) }).optional(),
-    amenities: z
-      .array(
-        z.object({ id, name: requiredText(80), capacity: z.number().int().min(1), open: hhmm, close: hhmm, deposit: money.optional() }),
-      )
-      .max(30)
-      .optional(),
     generalProviders: z.array(requiredText(60)).max(30).optional(),
     // data URL = foto propia · '' = foto de ejemplo · null = sin portada
     cover: dataUrl(3).or(z.literal('')).nullable().optional(),
@@ -186,6 +183,29 @@ export const OPERATION_SCHEMAS = {
     whatsapp: z.object({ enabled: z.boolean(), notices: z.boolean(), reminders: z.boolean(), number: text(20).optional() }).optional(),
   }),
   setWhatsappAlerts: z.object({ enabled: z.boolean() }),
+
+  saveAmenity: z.object({
+    id: id.optional(),
+    name: requiredText(80),
+    capacity: z.number().int().min(1).max(5000),
+    open: hhmm,
+    close: hhmm,
+    deposit: money.optional(),
+    description: text(300).optional(),
+    active: z.boolean().optional(),
+  }),
+  deleteAmenity: byId,
+  saveCharge: z.object({
+    id: id.optional(),
+    name: requiredText(80),
+    amount: z.number().positive().max(10_000_000),
+    kind: z.enum(['once', 'monthly']),
+    dueDate: day.optional(),
+    from: period.optional(),
+    to: period.nullish(),
+    unitIds: z.array(id).max(5000).optional(),
+  }),
+  deleteCharge: byId,
 
   // ---------- Caseta física ----------
   createDevice: z.object({
