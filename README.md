@@ -39,6 +39,10 @@ npm run db:seed      # carga datos de ejemplo en una base vacía
 docker compose up    # APP (nginx) + API en http://localhost:8080
 ```
 
+### Demo en GitHub Pages
+
+Cada push a `main` publica la demo (todo en el navegador, sin servidor) con `.github/workflows/pages.yml`. Actívalo una vez en **Settings → Pages → Source: GitHub Actions**; queda en `https://USUARIO.github.io/app-residencial/`.
+
 ### Cuentas de demostración
 
 | Acceso                          | Correo                    | Contraseña   |
