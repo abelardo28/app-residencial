@@ -31,8 +31,8 @@ export async function requestPush() {
 export function showSystemNotification({ title, body, link }) {
   if (pushPermission() !== 'granted') return;
   try {
-    if (registration) registration.showNotification(title, { body, icon: '/favicon.svg', data: { link } });
-    else new Notification(title, { body, icon: '/favicon.svg' });
+    if (registration) registration.showNotification(title, { body, icon: import.meta.env.BASE_URL + 'icon-192.png', data: { link } });
+    else new Notification(title, { body, icon: import.meta.env.BASE_URL + 'icon-192.png' });
   } catch {
     /* algunos navegadores bloquean notificaciones fuera de HTTPS */
   }

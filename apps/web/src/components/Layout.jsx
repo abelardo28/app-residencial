@@ -26,6 +26,7 @@ import NotificationsPanel from './NotificationsPanel';
 import SosButton from './SosButton';
 import { DemoOutboxButton } from './DemoOutbox';
 import { WhatsappSimButton } from './WhatsappSim';
+import InstallApp from './InstallApp';
 import { initials } from '../lib/utils';
 import { coverOf } from '../lib/cover';
 
@@ -152,6 +153,7 @@ export default function Layout() {
           </nav>
         ))}
         <div style={{ flex: 1 }} />
+        <InstallApp className="block" />
         <div className="row card flat" style={{ padding: 10, gap: 10 }}>
           <div className="avatar">{initials(me.name)}</div>
           <div style={{ flex: 1, minWidth: 0 }}>

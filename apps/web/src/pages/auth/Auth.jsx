@@ -3,6 +3,7 @@ import { Home, Building2, Eye, EyeOff, ShieldCheck, Lock, Mail, MessageCircle, C
 import { useStore, SHOW_DEMO_HELP } from '../../data/store';
 import { passwordIssues } from '@residencial/shared';
 import { DemoOutboxButton, takePendingActivation } from '../../components/DemoOutbox';
+import InstallApp from '../../components/InstallApp';
 
 // Lee un enlace de activación (#/activar?t=…&e=…) y lo borra de la barra de direcciones
 // para que el token no quede en el historial.
@@ -237,6 +238,7 @@ function LoginForm({ scope, email: initialEmail = '', go }) {
           ¿Recibiste una invitación? Activa tu cuenta
         </button>
       )}
+      <InstallApp className="block" />
       <div className="auth-divider" />
       <button type="button" className="link-btn faint" onClick={() => go({ name: portal ? 'login' : 'portal' })}>
         {portal ? (

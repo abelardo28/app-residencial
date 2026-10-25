@@ -1,9 +1,18 @@
 {
+  "id": "./",
   "name": "App Residencial",
   "short_name": "Residencial",
-  "start_url": "/",
+  "description": "Accesos, pagos y avisos de tu residencial.",
+  "lang": "es-MX",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#ece9e4",
-  "theme_color": "#2c2b29",
-  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+  "theme_color": "#ece9e4",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
 }
