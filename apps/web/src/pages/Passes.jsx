@@ -92,14 +92,14 @@ export default function Passes() {
         )}
         {tab === 'history' && list.length > 0 && (
           <p className="faint" style={{ marginBottom: 8 }}>
-            Cada visita aparece una vez. Usa «Repetir» para darle un pase nuevo con los mismos datos.
+            Cada visita aparece una vez. Toca una para ver su código o usa «Repetir» para darle un pase nuevo con los mismos datos.
           </p>
         )}
         <div className="list cols-lg">
           {list.map((p) => {
             const st = passStatus(p);
             return (
-              <div key={p.id} className="list-item">
+              <div key={p.id} className="list-item tap" onClick={() => setViewing(p)}>
                 <div className="avatar">{p.mode === 'recurrent' ? <Repeat size={17} /> : <QrCode size={17} />}</div>
                 <div className="grow">
                   <div className="title">{p.visitorName}</div>
@@ -114,11 +114,19 @@ export default function Passes() {
                 </div>
                 <Badge tone={st.tone}>{st.label}</Badge>
                 {tab === 'history' && (
-                  <Button size="sm" variant="primary" onClick={() => setCreating(p)}>
-                    <CopyPlus size={14} /> Repetir
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    aria-label="Repetir"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCreating(p);
+                    }}
+                  >
+                    <CopyPlus size={14} /> <span className="hide-sm">Repetir</span>
                   </Button>
                 )}
-                <Button size="sm" onClick={() => setViewing(p)}>
+                <Button size="sm" className="hide-sm">
                   Ver
                 </Button>
               </div>

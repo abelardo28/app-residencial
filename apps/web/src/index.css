@@ -1972,3 +1972,166 @@ button.list-item.clickable:hover {
 .user-card:hover {
   border-color: var(--border-strong);
 }
+
+/* Bitácora de accesos */
+.log-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.log-search {
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+.log-filters .chips {
+  flex: 0 1 auto;
+}
+.kdot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+  background: var(--info);
+}
+.kdot.ok {
+  background: var(--ok);
+}
+.kdot.warn {
+  background: var(--warn);
+}
+.ok-text {
+  color: var(--ok);
+}
+.bad-text {
+  color: var(--bad);
+  font-weight: 500;
+}
+.log-dl {
+  display: grid;
+  gap: 0;
+}
+.log-dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.log-dl dt {
+  color: var(--text-2);
+}
+.log-dl dd {
+  margin: 0;
+  text-align: right;
+}
+@media (max-width: 760px) {
+  .log-filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .log-search {
+    flex: none;
+    max-width: none;
+  }
+  .log-card {
+    padding: 4px 14px;
+  }
+  .log-day-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-3);
+    padding: 14px 2px 4px;
+  }
+  .log-day + .log-day {
+    border-top: 1px solid var(--border);
+  }
+  .log-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 9px 2px;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .log-row:active {
+    opacity: 0.6;
+  }
+  .log-thumb {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    object-fit: cover;
+    display: grid;
+    place-items: center;
+    background: var(--surface-sunk);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+  }
+  .log-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .log-name {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .log-sub {
+    font-size: 13px;
+    color: var(--text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .log-time {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .log-time small {
+    font-size: 12px;
+    color: var(--text-3);
+  }
+  .log-time small.ok-text {
+    color: var(--ok);
+    font-weight: 500;
+  }
+}
+.list-item.tap {
+  cursor: pointer;
+}
+.log-filters > * {
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  /* ancho 0 para que la fila de filtros no ensanche la página; se desplaza de lado */
+  .log-filters .chips.scroll {
+    width: 0;
+    min-width: calc(100% + 28px);
+  }
+}
+tr.tap {
+  cursor: pointer;
+}
