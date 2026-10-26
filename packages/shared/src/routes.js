@@ -60,6 +60,8 @@ export const OPERATION_ROUTES = {
   saveCharge: { method: 'POST', path: '/charges', args: same },
   deleteCharge: { method: 'DELETE', path: '/charges/:id', args: one('id') },
   setWhatsappAlerts: { method: 'POST', path: '/whatsapp/alerts', args: one('enabled') },
+  setDefaultCard: { method: 'POST', path: '/cards/:id/default', args: one('id') },
+  deleteCard: { method: 'DELETE', path: '/cards/:id', args: one('id') },
 
   // Caseta física (las operaciones de los equipos tienen sus propias rutas en /devices)
   createDevice: { method: 'POST', path: '/gate/devices', args: same },

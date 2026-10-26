@@ -8,7 +8,8 @@ import { OPERATION_SCHEMAS } from './schemas.js';
 const MB = 1024 * 1024;
 // Lo que se paga: un mes de cuota (AAAA-MM) o un concepto (ch_… o ch_…@AAAA-MM)
 const period = z.string().regex(/^(\d{4}-(0[1-9]|1[0-2])|[\w-]{1,64}(@\d{4}-(0[1-9]|1[0-2]))?)$/);
-const CheckoutBody = z.object({ periods: z.array(period).min(1).max(48) });
+const CheckoutBody = z.object({ periods: z.array(period).min(1).max(48), saveCard: z.boolean().default(false) });
+const SavedCardBody = z.object({ periods: z.array(period).min(1).max(48), cardId: z.string().min(1).max(64) });
 const CardBody = z.object({ saveCard: z.boolean().default(false) });
 const TransferBody = z.object({ reference: z.string().trim().max(80).default(''), receipt: z.string().max(5 * MB) });
 const AutopayBody = z.object({ enabled: z.boolean() });
@@ -31,6 +32,7 @@ export default async function tenantRoutes(app, { tenantService, subscriptionSer
   app.post('/payments/ecartpay/checkout', resident, async (req) =>
     tenantService.createCheckout(req.account, parse(CheckoutBody, req.body)),
   );
+  app.post('/payments/ecartpay/card', resident, async (req) => tenantService.payWithCard(req.account, parse(SavedCardBody, req.body)));
   app.post('/payments/ecartpay/:id/confirm', resident, async (req) => tenantService.confirmCheckout(String(req.params.id), req.account));
 
   // Suscripción del residencial con la empresa. Disponible aunque el servicio esté suspendido, para poder pagarla.

@@ -184,8 +184,10 @@ export default function ApiProvider({ children }) {
           return (await api.request(route.method, `/tenant${path}`, route.method === 'DELETE' ? undefined : body))?.result;
         }),
       logout: auth.logout,
-      startEcartpay: (periods) =>
-        withErrorToast(toast, async () => ({ ...(await api.post('/tenant/payments/ecartpay/checkout', { periods })), periods })),
+      startEcartpay: (periods, { saveCard = false } = {}) =>
+        withErrorToast(toast, async () => ({ ...(await api.post('/tenant/payments/ecartpay/checkout', { periods, saveCard })), periods })),
+      payWithCard: (periods, cardId) =>
+        withErrorToast(toast, () => mutate(() => api.post('/tenant/payments/ecartpay/card', { periods, cardId }))),
       confirmEcartpay: (checkout) =>
         withErrorToast(toast, () => mutate(() => api.post(`/tenant/payments/ecartpay/${encodeURIComponent(checkout.id)}/confirm`))),
     };

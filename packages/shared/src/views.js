@@ -61,6 +61,8 @@ const forResident = (tenant, me) => {
     gateCommands: (tenant.gateCommands || []).filter((c) => c.by === me.id).slice(0, 5),
     gateEvents: [],
     whatsappOptOuts: (tenant.whatsappOptOuts || []).filter((o) => o.id === me.id),
+    // Tarjetas propias, sin el identificador de Ecart Pay (sólo el servidor cobra con él)
+    cards: (tenant.cards || []).filter((c) => c.userId === me.id).map((c) => omit(c, ['token'])),
   };
 };
 
@@ -87,9 +89,11 @@ const forGuard = (tenant, me) => ({
   gateCommands: (tenant.gateCommands || []).slice(0, 30),
   gateEvents: (tenant.gateEvents || []).slice(0, 60),
   whatsappOptOuts: (tenant.whatsappOptOuts || []).filter((o) => o.id === me.id),
+  cards: [],
 });
 
-const forAdmin = (tenant, me) => ({ ...tenant, notifications: tenant.notifications.filter((n) => n.userId === me.id) });
+// Las tarjetas de los residentes son suyas: administración no las recibe.
+const forAdmin = (tenant, me) => ({ ...tenant, notifications: tenant.notifications.filter((n) => n.userId === me.id), cards: [] });
 
 export function viewFor(tenant, me) {
   if (me.role === 'admin') return forAdmin(tenant, me);

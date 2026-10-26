@@ -65,7 +65,7 @@ const COLLECTIONS = [
 ];
 const validTenant = (t) => t?.settings && COLLECTIONS.every((c) => Array.isArray(t[c]));
 // Colecciones agregadas después: los datos guardados en versiones anteriores las reciben vacías.
-const LATER_COLLECTIONS = ['bankMovements', 'devices', 'tags', 'gateCommands', 'gateEvents', 'whatsappOptOuts'];
+const LATER_COLLECTIONS = ['bankMovements', 'devices', 'tags', 'gateCommands', 'gateEvents', 'whatsappOptOuts', 'cards'];
 const upgrade = (data) => {
   for (const t of Object.values(data.tenants)) for (const c of LATER_COLLECTIONS) t[c] = Array.isArray(t[c]) ? t[c] : [];
   data.platform.billing ||= [];
@@ -1168,13 +1168,34 @@ export default function DemoProvider({ children }) {
         setSession(null);
       },
       // Ecart Pay simulado: en la API el servidor crea el cobro y confirma el pago con el proveedor.
-      startEcartpay: async (periods) => ({ id: uid('ecp_test_'), periods, checkoutUrl: null, mock: true }),
-      confirmEcartpay: (checkout) =>
+      startEcartpay: async (periods, { saveCard = false } = {}) => ({
+        id: uid('ecp_test_'),
+        periods,
+        saveCard,
+        checkoutUrl: null,
+        mock: true,
+      }),
+      // En la demo la tarjeta es la que se escribió en el checkout de prueba
+      confirmEcartpay: (checkout, card) =>
         withErrorToast(toast, () => {
+          const paid = card && { ...card, token: uid('card_demo_') };
           execute(
             'submitPayment',
             { periods: checkout.periods, method: 'ecartpay', ecartpayId: checkout.id, reference: checkout.id },
-            { ecartpay: { id: checkout.id } },
+            { ecartpay: { id: checkout.id, card: paid, saveCard: checkout.saveCard } },
+          );
+          return { status: 'paid' };
+        }),
+      payWithCard: (periods, cardId) =>
+        withErrorToast(toast, async () => {
+          await wait(500);
+          const card = rootRef.current.tenants[sessionRef.current.tenantId].cards.find((c) => c.id === cardId);
+          if (!card) throw new Error('La tarjeta no existe.');
+          const id = uid('ecp_chg_');
+          execute(
+            'submitPayment',
+            { periods, method: 'ecartpay', ecartpayId: id, reference: id },
+            { ecartpay: { id, card: { brand: card.brand, last4: card.last4 } } },
           );
           return { status: 'paid' };
         }),

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { CreditCard, Landmark, Banknote, Check, X, FileText, Bell, Receipt, Lock, Plus, Copy, Ban } from 'lucide-react';
+import { CreditCard, Landmark, Banknote, Check, X, FileText, Bell, Receipt, Lock, Plus, Copy, Ban, Star, Trash2 } from 'lucide-react';
 import { useStore, unitLabel, userName } from '../data/store';
 import { monthLabel, money, fmtDate, fmtDateTime, fileToAttachment, monthKey } from '../lib/utils';
-import { debtOf, debtRestriction, ledger, paymentMonth, periodLabel, unitReference } from '@residencial/shared';
+import { bankAccounts, debtOf, debtRestriction, ledger, paymentMonth, periodLabel, unitReference } from '@residencial/shared';
 import { Attachment, Badge, Button, Card, CardHead, Empty, Field, FileDrop, Modal, PageHead, Stat, Tabs } from '../components/ui';
 import Reconciliation from './Reconciliation';
 import Charges from '../components/Charges';
@@ -89,7 +89,10 @@ function ResidentPayments() {
               ))}
           </div>
         </Card>
-        <TransferCard />
+        <div className="stack">
+          <TransferCard />
+          <SavedCards />
+        </div>
         <Card>
           <CardHead title="Movimientos" />
           {mine.length === 0 && <Empty>Sin movimientos.</Empty>}
@@ -102,7 +105,8 @@ function ResidentPayments() {
                 <div className="grow">
                   <div className="title">{periodLabel(p)}</div>
                   <div className="faint">
-                    {METHOD[p.method]} · {fmtDateTime(p.createdAt)}
+                    {METHOD[p.method]}
+                    {p.card ? ` ${p.card}` : ''} · {fmtDateTime(p.createdAt)}
                   </div>
                   {p.status === 'rejected' && p.reviewNote && (
                     <div className="faint" style={{ color: 'var(--bad)' }}>
@@ -125,12 +129,10 @@ function ResidentPayments() {
   );
 }
 
-/** Datos para pagar por SPEI con la referencia de la casa: así la conciliación aplica el pago sola. */
-function TransferCard() {
-  const { db, me, toast } = useStore();
-  const ref = unitReference(db, me.unitId);
-  const { bank } = db.settings;
-  const copy = async (text, what) => {
+/** Copia sin espacios (CLABE, referencia) y avisa. */
+function useCopy() {
+  const { toast } = useStore();
+  return async (text, what) => {
     try {
       await navigator.clipboard.writeText(text.replace(/\s/g, ''));
       toast('Copiado', what);
@@ -138,6 +140,37 @@ function TransferCard() {
       toast('No se pudo copiar', 'Cópialo manualmente.', 'bad');
     }
   };
+}
+
+/** Cuentas del residencial con su CLABE para copiar. */
+function BankAccountList({ accounts }) {
+  const copy = useCopy();
+  return accounts.map((b) => (
+    <div key={b.id} className="bank-account">
+      <div className="grow">
+        {b.alias && <div className="title">{b.alias}</div>}
+        <div className="faint">CLABE · {b.name}</div>
+        <span className="mono">{b.clabe}</span>
+        <div className="faint">Beneficiario: {b.holder}</div>
+      </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => copy(b.clabe, `CLABE de ${b.alias || b.name}`)}
+        aria-label={`Copiar CLABE de ${b.alias || b.name}`}
+      >
+        <Copy size={15} />
+      </Button>
+    </div>
+  ));
+}
+
+/** Datos para pagar por SPEI con la referencia de la casa: así la conciliación aplica el pago sola. */
+function TransferCard() {
+  const { db, me } = useStore();
+  const copy = useCopy();
+  const ref = unitReference(db, me.unitId);
+  const accounts = bankAccounts(db.settings);
   return (
     <Card>
       <CardHead title="Paga por transferencia" subtitle="Escribe tu referencia en el campo «Referencia numérica» de tu banco." />
@@ -153,18 +186,75 @@ function TransferCard() {
             <Copy size={15} /> Copiar
           </Button>
         </div>
-        <div className="row between">
-          <div>
-            <div className="faint">CLABE · {bank.name}</div>
-            <span className="mono">{bank.clabe}</span>
-          </div>
-          <Button size="sm" variant="ghost" onClick={() => copy(bank.clabe, 'CLABE')} aria-label="Copiar CLABE">
-            <Copy size={15} />
-          </Button>
-        </div>
-        <div className="faint">Beneficiario: {bank.holder}</div>
+        {accounts.length ? <BankAccountList accounts={accounts} /> : <p className="muted">Administración aún no registra una cuenta.</p>}
         <div className="faint">Con la referencia, tu pago se aplica al conciliar el estado de cuenta y no necesitas subir comprobante.</div>
       </div>
+    </Card>
+  );
+}
+
+/** Tarjetas propias, con la predeterminada primero. */
+const myCards = (db, me) =>
+  (db.cards || []).filter((c) => c.userId === me.id).sort((a, b) => Number(!!b.isDefault) - Number(!!a.isDefault));
+const cardName = (c) => `${c.brand} ···${c.last4}`;
+
+function SavedCards() {
+  const { db, me, actions, toast } = useStore();
+  const cards = myCards(db, me);
+  return (
+    <Card>
+      <CardHead
+        title="Tarjetas guardadas"
+        subtitle="Se guardan al pagar marcando «Guardar esta tarjeta». Sólo se conserva el identificador de Ecart Pay."
+      />
+      {cards.length === 0 ? (
+        <p className="muted">Aún no tienes tarjetas guardadas.</p>
+      ) : (
+        <div className="list">
+          {cards.map((c) => (
+            <div key={c.id} className="list-item">
+              <div className="avatar">
+                <CreditCard size={16} />
+              </div>
+              <div className="grow">
+                <div className="title" style={{ whiteSpace: 'nowrap' }}>
+                  {cardName(c)}
+                </div>
+              </div>
+              {c.isDefault ? (
+                <Badge tone="ok">Predeterminada</Badge>
+              ) : (
+                <Button
+                  size="sm"
+                  aria-label={`Usar ${cardName(c)} como predeterminada`}
+                  onClick={() =>
+                    actions.setDefaultCard(c.id).then(
+                      () => toast('Tarjeta predeterminada', cardName(c)),
+                      () => {},
+                    )
+                  }
+                >
+                  <Star size={14} /> <span className="hide-sm">Predeterminada</span>
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-label={`Eliminar ${cardName(c)}`}
+                onClick={() =>
+                  window.confirm(`¿Eliminar la tarjeta ${cardName(c)}?`) &&
+                  actions.deleteCard(c.id).then(
+                    () => toast('Tarjeta eliminada', cardName(c)),
+                    () => {},
+                  )
+                }
+              >
+                <Trash2 size={15} />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
@@ -177,16 +267,34 @@ function PayModal({ owed, onClose }) {
   const [reference, setReference] = useState('');
   const [checkout, setCheckout] = useState(null);
   const [busy, setBusy] = useState(false);
+  const cards = myCards(db, me);
+  const [cardId, setCardId] = useState(cards[0]?.id || 'new');
+  const [saveCard, setSaveCard] = useState(!cards.length);
+  const card = cards.find((c) => c.id === cardId);
+  const accounts = bankAccounts(db.settings);
+  const [accountId, setAccountId] = useState(accounts[0]?.id);
   const total = sumAmount(owed.filter((o) => periods.includes(o.key)));
   const toggle = (k) => setPeriods((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
 
   async function submit() {
     if (!periods.length) return;
     if (method === 'transfer' && !receipt) return toast('Falta el comprobante', 'Adjunta la imagen o PDF de tu transferencia.', 'bad');
+    if (method === 'ecartpay' && card) {
+      setBusy(true);
+      try {
+        await actions.payWithCard(periods, card.id);
+      } catch {
+        return;
+      } finally {
+        setBusy(false);
+      }
+      toast('¡Pago aprobado!', `${money(total)} pagados con ${cardName(card)}.`);
+      return onClose();
+    }
     if (method === 'ecartpay') {
       setBusy(true);
       try {
-        const c = await actions.startEcartpay(periods);
+        const c = await actions.startEcartpay(periods, { saveCard });
         if (c.checkoutUrl) window.open(c.checkoutUrl, '_blank', 'noopener');
         setCheckout(c);
       } catch {
@@ -197,7 +305,13 @@ function PayModal({ owed, onClose }) {
       return;
     }
     try {
-      await actions.submitPayment({ periods, method, receipt, reference });
+      await actions.submitPayment({
+        periods,
+        method,
+        receipt,
+        reference,
+        ...(method === 'transfer' && accountId ? { bankAccountId: accountId } : {}),
+      });
     } catch {
       return;
     }
@@ -205,11 +319,11 @@ function PayModal({ owed, onClose }) {
     onClose();
   }
 
-  async function confirmEcart() {
+  async function confirmEcart(paidWith) {
     setBusy(true);
     let st;
     try {
-      st = await actions.confirmEcartpay(checkout);
+      st = await actions.confirmEcartpay(checkout, paidWith);
     } catch {
       return;
     } finally {
@@ -251,25 +365,61 @@ function PayModal({ owed, onClose }) {
           value={method}
           onChange={setMethod}
           items={[
-            { value: 'ecartpay', label: 'Ecart Pay', icon: <CreditCard size={15} /> },
+            { value: 'ecartpay', label: 'Tarjeta', icon: <CreditCard size={15} /> },
             { value: 'transfer', label: 'Transferencia', icon: <Landmark size={15} /> },
             { value: 'cash', label: 'Efectivo', icon: <Banknote size={15} /> },
           ]}
         />
         {method === 'ecartpay' && (
-          <p className="muted">
-            Paga con tarjeta de crédito, débito u otros métodos disponibles en Ecart Pay. El pago se aprueba en automático y administración
-            recibe el aviso.
-          </p>
+          <>
+            {cards.length > 0 && (
+              <div className="pick-list" role="radiogroup" aria-label="Tarjeta">
+                {[...cards, { id: 'new' }].map((c) => (
+                  <label key={c.id} className={`pick ${cardId === c.id ? 'on' : ''}`}>
+                    <input type="radio" name="card" checked={cardId === c.id} onChange={() => setCardId(c.id)} />
+                    <CreditCard size={16} />
+                    <span className="grow">{c.id === 'new' ? 'Otra tarjeta' : cardName(c)}</span>
+                    {c.isDefault && <Badge tone="ok">Predeterminada</Badge>}
+                  </label>
+                ))}
+              </div>
+            )}
+            {card ? (
+              <p className="muted">Se cobra en este momento a tu {cardName(card)} y el pago queda aprobado.</p>
+            ) : (
+              <>
+                <p className="muted">
+                  Paga con tarjeta de crédito, débito u otros métodos disponibles en Ecart Pay. El pago se aprueba en automático y
+                  administración recibe el aviso.
+                </p>
+                <label className="row" style={{ gap: 8 }}>
+                  <input type="checkbox" checked={saveCard} onChange={(e) => setSaveCard(e.target.checked)} /> Guardar esta tarjeta para mis
+                  próximos pagos
+                </label>
+              </>
+            )}
+          </>
         )}
         {method === 'transfer' && (
           <>
+            {accounts.length > 1 && (
+              <Field label="¿A qué cuenta transferiste?">
+                <div className="chips">
+                  {accounts.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      className={`chip ${accountId === a.id ? 'on' : ''}`}
+                      onClick={() => setAccountId(a.id)}
+                    >
+                      {a.alias || a.name}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            )}
             <div className="card flat" style={{ padding: 14 }}>
-              <div className="faint">Datos bancarios</div>
-              <div>{db.settings.bank.holder}</div>
-              <div>
-                {db.settings.bank.name} · CLABE <span className="mono">{db.settings.bank.clabe}</span>
-              </div>
+              <BankAccountList accounts={accounts.filter((a) => a.id === accountId)} />
               <div>
                 Referencia numérica <b className="mono">{unitReference(db, me.unitId)}</b>
               </div>
@@ -324,6 +474,10 @@ function PayModal({ owed, onClose }) {
 // Checkout simulado mientras no haya backend conectado a Ecart Pay (también lo usa el pago de la suscripción).
 export function EcartCheckout({ total, checkout, busy, onPay, onClose }) {
   const live = !checkout.mock;
+  const [number, setNumber] = useState('4242 4242 4242 4242');
+  const digits = number.replace(/\D/g, '');
+  // En modo de prueba se informa la tarjeta escrita (en la API la informa Ecart Pay)
+  const typed = { brand: { 4: 'Visa', 5: 'Mastercard', 3: 'American Express' }[digits[0]] || 'Tarjeta', last4: digits.slice(-4) };
   return (
     <Modal
       title="Ecart Pay"
@@ -333,7 +487,7 @@ export function EcartCheckout({ total, checkout, busy, onPay, onClose }) {
           <Button variant="ghost" onClick={onClose}>
             Cancelar
           </Button>
-          <Button variant="primary" disabled={busy} onClick={onPay}>
+          <Button variant="primary" disabled={busy || (!live && digits.length < 13)} onClick={() => onPay(live ? null : typed)}>
             {live ? 'Ya pagué, verificar' : `Pagar ${money(total)}`}
           </Button>
         </>
@@ -347,7 +501,7 @@ export function EcartCheckout({ total, checkout, busy, onPay, onClose }) {
             <Lock size={16} /> Modo de prueba: no se hace ningún cargo real.
           </div>
           <Field label="Número de tarjeta">
-            <input className="input mono" defaultValue="4242 4242 4242 4242" />
+            <input className="input mono" inputMode="numeric" value={number} onChange={(e) => setNumber(e.target.value)} />
           </Field>
           <div className="grid g2">
             <Field label="Vencimiento">
@@ -411,8 +565,17 @@ function PaymentDetail({ p, onClose, review }) {
         </div>
         <div className="row between">
           <span className="muted">Método</span>
-          <span>{METHOD[p.method]}</span>
+          <span>
+            {METHOD[p.method]}
+            {p.card ? ` · ${p.card}` : ''}
+          </span>
         </div>
+        {p.bankAccount && (
+          <div className="row between">
+            <span className="muted">Cuenta</span>
+            <span>{p.bankAccount}</span>
+          </div>
+        )}
         {p.reference && (
           <div className="row between">
             <span className="muted">Referencia</span>

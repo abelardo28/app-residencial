@@ -103,3 +103,22 @@ export function parseBankStatement(text) {
   }
   return { movements, error: movements.length ? null : 'No encontramos depósitos en el archivo.' };
 }
+
+/**
+ * Cuentas para transferencias del residencial, con la principal primero.
+ * Los residenciales guardados antes de tener varias cuentas sólo traen `settings.bank`.
+ */
+export function bankAccounts(settings) {
+  const list = settings?.bankAccounts?.length
+    ? settings.bankAccounts
+    : settings?.bank?.clabe
+      ? [{ id: 'principal', alias: '', ...settings.bank, primary: true }]
+      : [];
+  return [...list].sort((a, b) => Number(!!b.primary) - Number(!!a.primary));
+}
+
+/** Últimos 4 dígitos de la CLABE, para nombrar la cuenta sin mostrarla completa. */
+export const clabeTail = (clabe = '') => clabe.replace(/\D/g, '').slice(-4);
+
+/** Nombre corto de una cuenta: «Mantenimiento · BBVA ···4455». */
+export const bankAccountLabel = (a) => [a.alias, `${a.name} ···${clabeTail(a.clabe)}`].filter(Boolean).join(' · ');

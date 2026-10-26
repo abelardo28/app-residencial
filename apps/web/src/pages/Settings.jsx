@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { billingSettings, gateSettings } from '@residencial/shared';
+import { bankAccounts, billingSettings, gateSettings } from '@residencial/shared';
 import { Link } from 'react-router-dom';
 import { useStore } from '../data/store';
 import { SubscriptionCard } from '../components/Subscription';
+import { Plus, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, CardHead, Field, FileDrop, PageHead } from '../components/ui';
 import { compressImage } from '../lib/utils';
 import { coverOf, DEMO_COVER } from '../lib/cover';
@@ -21,15 +22,18 @@ export default function SettingsPage() {
     name: s.name,
     monthlyFee: s.monthlyFee,
     dueDay: s.dueDay,
-    bankName: s.bank.name,
-    clabe: s.bank.clabe,
-    holder: s.bank.holder,
     providers: s.generalProviders.join(', '),
   });
+  const [banks, setBanks] = useState(() => bankAccounts(s).map((a) => ({ alias: '', ...a })));
+  const setBank = (i, k) => (e) => setBanks((list) => list.map((a, j) => (j === i ? { ...a, [k]: e.target.value } : a)));
+  const makePrimary = (i) => setBanks((list) => list.map((a, j) => ({ ...a, primary: j === i })));
+  const holder = banks[0]?.holder || s.name;
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
   const toggle = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.checked }));
 
   function save() {
+    const incomplete = banks.find((a) => (a.clabe || a.name || a.alias) && !(a.clabe.trim() && a.name.trim() && a.holder.trim()));
+    if (incomplete) return toast('Completa la cuenta', 'Cada cuenta necesita banco, CLABE y titular.', 'bad');
     actions
       .updateSettings({
         name: f.name,
@@ -43,7 +47,16 @@ export default function SettingsPage() {
           reservations: f.reservations,
           recurrentPasses: f.recurrentPasses,
         },
-        bank: { name: f.bankName, clabe: f.clabe, holder: f.holder },
+        bankAccounts: banks
+          .filter((a) => a.clabe.trim())
+          .map(({ id, alias, name, clabe, holder: h, primary }) => ({
+            ...(id ? { id } : {}),
+            alias,
+            name,
+            clabe,
+            holder: h,
+            primary: !!primary,
+          })),
         gate,
         whatsapp: wa,
         generalProviders: f.providers
@@ -85,17 +98,50 @@ export default function SettingsPage() {
           </div>
         </Card>
         <Card>
-          <CardHead title="Cuenta para transferencias" />
+          <CardHead
+            title="Cuentas para transferencias"
+            subtitle="Los residentes ven todas; la principal aparece primero y es la que se manda por WhatsApp primero."
+          />
           <div className="stack">
-            <Field label="Banco">
-              <input className="input" value={f.bankName} onChange={set('bankName')} />
-            </Field>
-            <Field label="CLABE">
-              <input className="input mono" value={f.clabe} onChange={set('clabe')} />
-            </Field>
-            <Field label="Titular">
-              <input className="input" value={f.holder} onChange={set('holder')} />
-            </Field>
+            {banks.map((a, i) => (
+              <div key={a.id || i} className="account-edit">
+                <div className="row between">
+                  <label className="row" style={{ gap: 8 }}>
+                    <input type="radio" name="primary-bank" checked={!!a.primary} onChange={() => makePrimary(i)} /> Principal
+                  </label>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label="Quitar cuenta"
+                    onClick={() =>
+                      setBanks((list) => {
+                        const rest = list.filter((_, j) => j !== i);
+                        return a.primary && rest.length ? rest.map((x, j) => ({ ...x, primary: j === 0 })) : rest;
+                      })
+                    }
+                  >
+                    <Trash2 size={15} />
+                  </Button>
+                </div>
+                <Field label="Para qué es (opcional)" hint="Por ejemplo: Cuotas de mantenimiento, Reservas">
+                  <input className="input" value={a.alias} onChange={setBank(i, 'alias')} />
+                </Field>
+                <Field label="Banco">
+                  <input className="input" value={a.name} onChange={setBank(i, 'name')} />
+                </Field>
+                <Field label="CLABE">
+                  <input className="input mono" inputMode="numeric" value={a.clabe} onChange={setBank(i, 'clabe')} />
+                </Field>
+                <Field label="Titular">
+                  <input className="input" value={a.holder} onChange={setBank(i, 'holder')} />
+                </Field>
+              </div>
+            ))}
+            {banks.length < 10 && (
+              <Button onClick={() => setBanks((list) => [...list, { alias: '', name: '', clabe: '', holder, primary: !list.length }])}>
+                <Plus size={16} /> Agregar cuenta
+              </Button>
+            )}
           </div>
         </Card>
         <Card>

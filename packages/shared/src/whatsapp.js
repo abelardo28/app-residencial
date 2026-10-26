@@ -3,6 +3,7 @@
 // WhatsApp Cloud API y el modo demo con el simulador; las acciones pasan por las mismas operaciones que la APP.
 import { fmtDate, fmtTime, money } from './format.js';
 import { debtOf, payableRows, unitReference } from './ledger.js';
+import { bankAccounts } from './bank.js';
 
 /** Minutos que se recuerda una conversación a medias (p. ej. "¿cómo se llama tu visita?"). */
 export const BOT_STATE_MINUTES = 30;
@@ -137,7 +138,7 @@ function balance(tenant, user, links) {
   const debt = debtOf(tenant, user.unitId);
   const owed = payableRows(tenant, user.unitId);
   const total = owed.reduce((s, r) => s + r.amount, 0);
-  const { bank } = tenant.settings;
+  const banks = bankAccounts(tenant.settings);
   if (!owed.length) return 'Estás al corriente. ¡Gracias por tu pago!';
   const lines = owed.map((r) => `• ${r.label}: ${money(r.amount)}${r.lateFee ? ` (incluye recargo de ${money(r.lateFee)})` : ''}`);
   return [
@@ -145,9 +146,13 @@ function balance(tenant, user, links) {
     ...lines,
     '',
     '*Pago por transferencia SPEI*',
-    `Banco: ${bank.name}`,
-    `CLABE: ${bank.clabe}`,
-    `Beneficiario: ${bank.holder}`,
+    ...banks.flatMap((b, i) => [
+      ...(i ? [''] : []),
+      ...(b.alias ? [`_${b.alias}_`] : []),
+      `Banco: ${b.name}`,
+      `CLABE: ${b.clabe}`,
+      `Beneficiario: ${b.holder}`,
+    ]),
     `Referencia numérica: *${unitReference(tenant, user.unitId)}*`,
     'Con tu referencia el pago se aplica solo, no necesitas mandar comprobante.',
     '',

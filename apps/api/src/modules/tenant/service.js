@@ -46,6 +46,26 @@ export function createTenantService({ repos, config, dispatch, events, ecartpay,
     return value ?? null;
   }
 
+  const charging = new Set(); // residentes con un cobro a tarjeta guardada en curso (evita cobrar dos veces)
+
+  /** Monto y concepto de lo que el residente quiere pagar; falla si algo ya está pagado o en revisión. */
+  function quote(acc, periods) {
+    if (acc.role !== 'resident') throw forbidden();
+    const unitId = acc.profile.unitId;
+    const data = {
+      settings: tenants.find(acc.tenantId).settings,
+      units: tenants.listRecords(acc.tenantId, 'units'),
+      payments: tenants.listRecords(acc.tenantId, 'payments'),
+    };
+    const list = [...new Set(periods)];
+    const rows = payableRows(data, unitId).filter((r) => list.includes(r.key));
+    if (!list.length || rows.length !== list.length)
+      throw new HttpError(409, 'Alguno de los cargos ya está pagado o en revisión.', 'period_unavailable');
+    const amount = amountDue(data, unitId, list); // cuota + recargos + conceptos
+    const concept = `Pago ${rows.map((r) => r.label).join(', ')}`.slice(0, 200);
+    return { list, rows, amount, concept, unitId };
+  }
+
   const userOf = (acc) => (next) => next.users.find((u) => u.id === acc.id) || toUserView(acc);
 
   /** Ejecuta una operación compartida como `acc`. `trusted` son datos que verificó el servidor. */
@@ -90,21 +110,15 @@ export function createTenantService({ repos, config, dispatch, events, ecartpay,
     },
 
     // ---------- Ecart Pay ----------
-    async createCheckout(acc, { periods }) {
-      if (acc.role !== 'resident') throw forbidden();
-      const unitId = acc.profile.unitId;
-      const data = {
-        settings: tenants.find(acc.tenantId).settings,
-        units: tenants.listRecords(acc.tenantId, 'units'),
-        payments: tenants.listRecords(acc.tenantId, 'payments'),
-      };
-      const list = [...new Set(periods)];
-      const rows = payableRows(data, unitId).filter((r) => list.includes(r.key));
-      if (!list.length || rows.length !== list.length)
-        throw new HttpError(409, 'Alguno de los cargos ya está pagado o en revisión.', 'period_unavailable');
-      const amount = amountDue(data, unitId, list); // cuota + recargos + conceptos
-      const concept = `Pago ${rows.map((r) => r.label).join(', ')}`.slice(0, 200);
-      const checkout = await ecartpay.createCheckout({ amount, concept, email: acc.email, reference: `${acc.tenantId}:${unitId}` });
+    async createCheckout(acc, { periods, saveCard = false }) {
+      const { list, amount, concept, unitId } = quote(acc, periods);
+      const checkout = await ecartpay.createCheckout({
+        amount,
+        concept,
+        email: acc.email,
+        reference: `${acc.tenantId}:${unitId}`,
+        saveCard,
+      });
       platform.createCheckout({
         id: checkout.id,
         tenantId: acc.tenantId,
@@ -113,6 +127,7 @@ export function createTenantService({ repos, config, dispatch, events, ecartpay,
         amount,
         checkoutUrl: checkout.checkoutUrl,
         createdAt: new Date().toISOString(),
+        saveCard,
       });
       return {
         id: checkout.id,
@@ -123,12 +138,57 @@ export function createTenantService({ repos, config, dispatch, events, ecartpay,
       };
     },
 
+    /** Cobra una tarjeta guardada del residente y registra el pago aprobado. */
+    async payWithCard(acc, { periods, cardId }) {
+      const card = tenants.listRecords(acc.tenantId, 'cards').find((c) => c.id === cardId && c.userId === acc.id);
+      if (!card) throw notFound('La tarjeta no existe.');
+      if (charging.has(acc.id)) throw new HttpError(409, 'Ya hay un cobro en curso. Espera a que termine.', 'charge_in_progress');
+      charging.add(acc.id);
+      try {
+        const { list, amount, concept, unitId } = quote(acc, periods);
+        let charge;
+        try {
+          charge = await ecartpay.chargeCard({
+            token: card.token,
+            amount,
+            concept,
+            reference: `${acc.tenantId}:${unitId}`,
+            email: acc.email,
+          });
+        } catch {
+          charge = { status: 'failed' };
+        }
+        if (charge.status !== 'paid' || !charge.id)
+          throw new HttpError(402, `La tarjeta ${card.brand} ···${card.last4} fue rechazada. Prueba con otra tarjeta.`, 'card_declined');
+        const now = new Date().toISOString();
+        platform.createCheckout({
+          id: charge.id,
+          tenantId: acc.tenantId,
+          userId: acc.id,
+          periods: list,
+          amount,
+          checkoutUrl: '',
+          createdAt: now,
+        });
+        execute(
+          acc,
+          'submitPayment',
+          { periods: list, method: 'ecartpay', ecartpayId: charge.id, reference: charge.id },
+          { ecartpay: { id: charge.id, amount, card: { brand: card.brand, last4: card.last4 } } },
+        );
+        platform.setCheckoutStatus(charge.id, 'confirmed');
+        return { status: 'paid', amount };
+      } finally {
+        charging.delete(acc.id);
+      }
+    },
+
     /** Consulta a Ecart Pay y, si el cobro está pagado, registra el pago aprobado (una sola vez). */
     async confirmCheckout(checkoutId, acc) {
       const c = platform.checkout(checkoutId);
       if (!c || (acc && c.userId !== acc.id)) throw notFound('El cobro no existe.');
       if (c.status === 'confirmed') return { status: 'paid' };
-      const status = await ecartpay.getStatus(checkoutId);
+      const { status, card } = await ecartpay.getCheckout(checkoutId);
       if (status !== 'paid') {
         if (status === 'failed') platform.setCheckoutStatus(checkoutId, 'failed');
         return { status };
@@ -141,7 +201,7 @@ export function createTenantService({ repos, config, dispatch, events, ecartpay,
           owner,
           'submitPayment',
           { periods: c.periods, method: 'ecartpay', ecartpayId: c.id, reference: c.id },
-          { ecartpay: { id: c.id, amount: c.amount } },
+          { ecartpay: { id: c.id, amount: c.amount, card, saveCard: c.saveCard } },
         );
         platform.setCheckoutStatus(checkoutId, 'confirmed');
         return true;

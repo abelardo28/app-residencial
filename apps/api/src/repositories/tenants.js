@@ -21,6 +21,7 @@ export const COLLECTIONS = [
   'gateCommands',
   'gateEvents',
   'whatsappOptOuts',
+  'cards',
 ];
 
 const toTenant = (r) =>

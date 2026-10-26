@@ -275,6 +275,24 @@ export function seedTenant({ sign }) {
     gate: { autoOpenOnPass: true, residentOpen: true, autoOpenResidentPlates: true },
     restrictions: { enabled: true, minMonths: 2, reservations: true, recurrentPasses: true },
     bank: { name: 'BBVA', clabe: '012 180 0011 2233 4455', holder: 'Asociación de Colonos Las Palmas A.C.' },
+    bankAccounts: [
+      {
+        id: 'bnk1',
+        alias: 'Cuotas de mantenimiento',
+        name: 'BBVA',
+        clabe: '012 180 0011 2233 4455',
+        holder: 'Asociación de Colonos Las Palmas A.C.',
+        primary: true,
+      },
+      {
+        id: 'bnk2',
+        alias: 'Reservas y eventos',
+        name: 'Santander',
+        clabe: '014 180 6550 9876 5432',
+        holder: 'Asociación de Colonos Las Palmas A.C.',
+        primary: false,
+      },
+    ],
     amenities: [
       { id: 'am1', name: 'Casa club', capacity: 60, open: '09:00', close: '22:00', deposit: 1000 },
       { id: 'am2', name: 'Asadores', capacity: 20, open: '10:00', close: '21:00', deposit: 300 },
@@ -434,6 +452,8 @@ function seedGate(d) {
     gateCommands: [],
     gateEvents: [],
     whatsappOptOuts: [],
+    // Tarjeta de prueba guardada por Ana (en la API sólo se guarda el identificador que entrega Ecart Pay)
+    cards: [{ id: 'card_res1', userId: 'res1', brand: 'Visa', last4: '4242', token: 'card_demo_res1', isDefault: true, createdAt: d(-40) }],
   };
 }
 
@@ -475,6 +495,7 @@ export function seedSecondTenant() {
     gateCommands: [],
     gateEvents: [],
     whatsappOptOuts: [],
+    cards: [],
   };
 }
 

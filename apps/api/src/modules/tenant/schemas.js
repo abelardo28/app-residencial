@@ -76,6 +76,7 @@ export const OPERATION_SCHEMAS = {
     receipt: attachment.nullish(),
     reference: text(80).optional(),
     notes: text(300).optional(),
+    bankAccountId: id.optional(),
   }),
   reviewPayment: z.object({ id, status: z.enum(['approved', 'rejected']), note: text(300).optional() }),
   registerCashPayment: z.object({ residentId: id, periods: payables, reference: text(80).optional() }),
@@ -177,6 +178,19 @@ export const OPERATION_SCHEMAS = {
       })
       .optional(),
     bank: z.object({ name: text(80), clabe: text(40), holder: text(120) }).optional(),
+    bankAccounts: z
+      .array(
+        z.object({
+          id: id.optional(),
+          alias: text(60).optional(),
+          name: requiredText(80),
+          clabe: requiredText(40),
+          holder: requiredText(120),
+          primary: z.boolean().optional(),
+        }),
+      )
+      .max(10)
+      .optional(),
     generalProviders: z.array(requiredText(60)).max(30).optional(),
     // data URL = foto propia · '' = foto de ejemplo · null = sin portada
     cover: dataUrl(3).or(z.literal('')).nullable().optional(),
@@ -184,6 +198,8 @@ export const OPERATION_SCHEMAS = {
     whatsapp: z.object({ enabled: z.boolean(), notices: z.boolean(), reminders: z.boolean(), number: text(20).optional() }).optional(),
   }),
   setWhatsappAlerts: z.object({ enabled: z.boolean() }),
+  setDefaultCard: byId,
+  deleteCard: byId,
 
   saveUnit: z.object({ id: id.optional(), label: requiredText(60), street: text(120).optional() }),
   deleteUnit: byId,

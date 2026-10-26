@@ -80,8 +80,8 @@ La cámara (escáner QR y foto de placa) sólo funciona en `localhost` o con HTT
 
 - Estado de cuenta mensual (pagado, en revisión, por pagar, vencido).
 - Tres formas de pago:
-  - **Ecart Pay**: el pago se aprueba en automático; se notifica al residente y a los administradores.
-  - **Transferencia**: el residente sube su comprobante (imagen o PDF) y la referencia.
+  - **Tarjeta (Ecart Pay)**: el pago se aprueba en automático; se notifica al residente y a los administradores. Al pagar puede marcar _Guardar esta tarjeta_ y en los siguientes pagos la elige de la lista (la predeterminada viene seleccionada) sin volver a escribirla. En _Pagos → Tarjetas guardadas_ cambia la predeterminada o elimina tarjetas (hasta 5). La API sólo guarda el identificador de Ecart Pay, la marca y los últimos 4 dígitos; administración no ve las tarjetas.
+  - **Transferencia**: el residente sube su comprobante (imagen o PDF) y la referencia, e indica a qué cuenta transfirió. Administración da de alta **varias cuentas** en _Configuración → Cuentas para transferencias_ (por ejemplo, una para cuotas y otra para reservas) y marca una como principal.
   - **Efectivo**: el residente lo reporta, o el administrador lo registra directamente.
 - Los administradores reciben un aviso por cada comprobante. Al **aprobar o rechazar** (con motivo), el residente recibe la notificación.
 - Morosidad por casa, recordatorios de pago individuales o masivos, y métricas de cobranza.

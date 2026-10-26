@@ -10,6 +10,7 @@ import { uid, nowIso, shortCode, numericCode, money, monthLabel, fmtTime } from 
 import { buildToken, evaluatePass, parseInput, normalizePlate, passStatus, PASS_TYPES } from './access.js';
 import { chargeApplies, debtRestriction, payableRows, periodLabel, unitByReference, unitNumber, unitReference } from './ledger.js';
 import { GATE_OPERATIONS, openAfterEntry } from './gate.js';
+import { bankAccountLabel, bankAccounts } from './bank.js';
 import { whatsappMessages } from './whatsapp.js';
 import { DomainError, forbidden, notFound as notFoundError } from './tx.js';
 
@@ -263,7 +264,7 @@ export const OPERATIONS = {
   // ---------- Pagos ----------
   submitPayment: {
     roles: RESIDENT,
-    run(t, { user, trusted }, { periods, method, receipt, reference, ecartpayId, notes }) {
+    run(t, { user, trusted }, { periods, method, receipt, reference, ecartpayId, notes, bankAccountId }) {
       const rows = rowsFor(t, user.unitId, periods);
       const total = rows.reduce((sum, r) => sum + r.amount, 0);
       // Un pago con Ecart Pay sólo se aprueba si el servidor confirmó el cobro (y su monto) con el proveedor.
@@ -289,7 +290,13 @@ export const OPERATIONS = {
         }),
       );
       const names = rows.map((r) => r.label).join(', ');
+      const card = verified ? trusted.ecartpay.card : null; // tarjeta con la que Ecart Pay cobró, si la informó
+      if (card?.last4) created.forEach((p) => (p.card = `${card.brand} ···${card.last4}`));
+      // Cuenta a la que dice haber transferido, para que administración sepa en qué estado de cuenta buscarla
+      const account = method === 'transfer' && bankAccountId && bankAccounts(t.next.settings).find((a) => a.id === bankAccountId);
+      if (account) created.forEach((p) => (p.bankAccount = bankAccountLabel(account)));
       created.forEach((p) => t.add('payments', p));
+      if (card?.token && trusted.ecartpay.saveCard) keepCard(t, user, card);
       const unit = t.unitLabel(user.unitId);
       if (verified) {
         t.notify(t.admins(), {
@@ -314,6 +321,24 @@ export const OPERATIONS = {
         });
       }
       return created;
+    },
+  },
+  // Tarjetas guardadas del residente: sólo se agregan desde un cobro confirmado por el servidor (`keepCard`).
+  setDefaultCard: {
+    roles: RESIDENT,
+    run(t, { user }, { id }) {
+      ownCard(t, user, id);
+      for (const c of t.next.cards) if (c.userId === user.id) t.patch('cards', c.id, { isDefault: c.id === id });
+    },
+  },
+  deleteCard: {
+    roles: RESIDENT,
+    run(t, { user }, { id }) {
+      const card = ownCard(t, user, id);
+      t.remove('cards', id);
+      const rest = t.next.cards.filter((c) => c.userId === user.id);
+      if (card.isDefault && rest.length) t.patch('cards', rest[0].id, { isDefault: true });
+      t.audit({ action: 'Tarjeta eliminada', target: `${card.brand} ···${card.last4}` });
     },
   },
   reviewPayment: {
@@ -978,6 +1003,26 @@ export const OPERATIONS = {
   updateSettings: {
     roles: ADMIN,
     run(t, _ctx, data) {
+      if (data.bankAccounts) {
+        // Siempre hay una sola cuenta principal; `bank` la repite para lo que sólo conoce una cuenta.
+        const list = data.bankAccounts
+          .filter((a) => a.clabe?.trim())
+          .map((a) => ({
+            id: a.id || uid('bnk_'),
+            alias: a.alias?.trim() || '',
+            name: a.name.trim(),
+            clabe: a.clabe.trim(),
+            holder: a.holder.trim(),
+            primary: !!a.primary,
+          }));
+        const primary = list.find((a) => a.primary) || list[0];
+        list.forEach((a) => (a.primary = a === primary));
+        data = {
+          ...data,
+          bankAccounts: list,
+          bank: primary ? pick(primary, ['name', 'clabe', 'holder']) : { name: '', clabe: '', holder: '' },
+        };
+      }
       t.next.settings = {
         ...t.next.settings,
         ...pick(data, [
@@ -988,6 +1033,7 @@ export const OPERATIONS = {
           'lateFeeGraceDays',
           'restrictions',
           'bank',
+          'bankAccounts',
           'generalProviders',
           'cover',
           'gate',
@@ -1001,6 +1047,32 @@ export const OPERATIONS = {
 
   ...GATE_OPERATIONS,
 };
+
+export const MAX_CARDS = 5;
+
+function ownCard(t, user, id) {
+  const card = t.get('cards', id);
+  if (!card || card.userId !== user.id) throw notFoundError('La tarjeta');
+  return card;
+}
+
+/** Guarda la tarjeta de un cobro (sólo su identificador en Ecart Pay); la primera queda como predeterminada. */
+function keepCard(t, user, { brand, last4, token }) {
+  const mine = t.next.cards.filter((c) => c.userId === user.id);
+  const same = mine.find((c) => c.token === token || (c.brand === brand && c.last4 === last4));
+  if (same) return t.patch('cards', same.id, { token });
+  if (mine.length >= MAX_CARDS) return;
+  t.add('cards', {
+    id: uid('card_'),
+    userId: user.id,
+    brand: brand || 'Tarjeta',
+    last4,
+    token,
+    isDefault: !mine.length,
+    createdAt: nowIso(),
+  });
+  t.audit({ action: 'Tarjeta guardada', target: `${brand} ···${last4}` });
+}
 
 /** Ejecuta una operación verificando el rol. Devuelve lo que regrese la operación. */
 export function runOperation(name, t, ctx, input = {}) {
