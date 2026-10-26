@@ -370,6 +370,10 @@ export default function DemoProvider({ children }) {
       return acc;
     };
     const INVALID_LINK = 'El enlace no es válido, ya se usó o venció. Pide a tu administrador que te envíe uno nuevo.';
+    const currentRef = () => {
+      const s = sessionRef.current;
+      return s && { scope: s.kind === 'platform' ? 'platform' : 'tenant', tenantId: s.tenantId, userId: s.userId };
+    };
 
     return {
       async login({ email, password, scope }) {
@@ -552,6 +556,57 @@ export default function DemoProvider({ children }) {
       },
       clearNotice() {
         setAuthNotice('');
+      },
+
+      // Perfil propio: nombre y contraseña (el correo y el teléfono los cambia administración)
+      async updateProfile({ name }) {
+        const ref = currentRef();
+        const clean = name?.trim();
+        if (!ref || !clean) return { ok: false, error: 'Escribe tu nombre.' };
+        setRoot((x) => {
+          const before = getAccount(x, ref);
+          const next = patchAccount(x, ref, (u) => ({ ...u, name: clean }));
+          return pushPlatform(next, 'audit', [
+            auditItem({
+              tenantId: ref.tenantId,
+              actor: clean,
+              action: 'Perfil actualizado',
+              target: before.name === clean ? before.email : `${before.name} → ${clean}`,
+            }),
+          ]);
+        });
+        return { ok: true };
+      },
+      async changePassword({ current, password }) {
+        const ref = currentRef();
+        const user = ref && getAccount(rootRef.current, ref);
+        if (!user) return { ok: false, error: 'Tu sesión terminó.' };
+        await wait(300);
+        if (!user.auth?.hash || !(await verifyPassword(current, user.auth))) {
+          setRoot((x) =>
+            pushPlatform(x, 'audit', [
+              auditItem({
+                tenantId: ref.tenantId,
+                actor: user.name,
+                action: 'Cambio de contraseña con la contraseña actual incorrecta',
+                severity: 'warn',
+              }),
+            ]),
+          );
+          return { ok: false, error: 'La contraseña actual no es correcta.' };
+        }
+        if (current === password) return { ok: false, error: 'La nueva contraseña debe ser distinta de la actual.' };
+        const issues = passwordIssues(password, user);
+        if (issues.length) return { ok: false, error: 'La contraseña no cumple: ' + issues.join(', ').toLowerCase() };
+        const h = await hashPassword(password);
+        setRoot((x) => {
+          let next = patchAuth(x, ref, { ...h, passwordChangedAt: nowIso() });
+          next = pushPlatform(next, 'outbox', templates.passwordChanged({ user, org: orgName(x, ref) }));
+          return pushPlatform(next, 'audit', [
+            auditItem({ tenantId: ref.tenantId, actor: user.name, action: 'Contraseña cambiada', target: user.email }),
+          ]);
+        });
+        return { ok: true };
       },
     };
   }, [setSession, endSession]);

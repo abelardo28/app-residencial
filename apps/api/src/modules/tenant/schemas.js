@@ -52,6 +52,7 @@ export const OPERATION_SCHEMAS = {
     notes: text(300).optional(),
   }),
   revokePass: byId,
+  regeneratePass: byId,
 
   checkCode: z.object({ text: requiredText(600) }),
   registerEntry: z.object({
@@ -184,6 +185,8 @@ export const OPERATION_SCHEMAS = {
   }),
   setWhatsappAlerts: z.object({ enabled: z.boolean() }),
 
+  saveUnit: z.object({ id: id.optional(), label: requiredText(60), street: text(120).optional() }),
+  deleteUnit: byId,
   saveAmenity: z.object({
     id: id.optional(),
     name: requiredText(80),

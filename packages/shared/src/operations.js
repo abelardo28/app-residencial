@@ -7,8 +7,8 @@
 //   input un objeto ya validado (la API valida forma y tipos con zod antes de llegar aquí)
 // Los campos que no debe decidir el cliente (ids, autor, estado, fechas) siempre se escriben después del input.
 import { uid, nowIso, shortCode, numericCode, money, monthLabel, fmtTime } from './format.js';
-import { buildToken, evaluatePass, parseInput, normalizePlate, PASS_TYPES } from './access.js';
-import { chargeApplies, debtRestriction, payableRows, periodLabel, unitByReference, unitReference } from './ledger.js';
+import { buildToken, evaluatePass, parseInput, normalizePlate, passStatus, PASS_TYPES } from './access.js';
+import { chargeApplies, debtRestriction, payableRows, periodLabel, unitByReference, unitNumber, unitReference } from './ledger.js';
 import { GATE_OPERATIONS, openAfterEntry } from './gate.js';
 import { whatsappMessages } from './whatsapp.js';
 import { DomainError, forbidden, notFound as notFoundError } from './tx.js';
@@ -38,6 +38,11 @@ const paymentOf = (row, data) => ({
   createdAt: nowIso(),
   ...data,
 });
+/** Guarda el número de cada casa antes de agregar o quitar casas, para que su referencia de pago no cambie. */
+function keepUnitNumbers(t) {
+  const numbers = new Map(t.next.units.map((u) => [u.id, unitNumber(t.next, u)]));
+  for (const u of t.next.units) if (u.refNo == null) t.patch('units', u.id, { refNo: numbers.get(u.id) });
+}
 const bankMovements = (t) => t.next.bankMovements || (t.next.bankMovements = []);
 
 /** Hora de un registro hecho sin conexión: se acepta hasta 72 h atrás y nunca en el futuro. */
@@ -97,6 +102,28 @@ export const OPERATIONS = {
         createdAt: nowIso(),
       };
       pass.token = buildToken(pass, sign);
+      return t.add('passes', pass);
+    },
+  },
+  // Cambia el código y el QR de un pase vigente: el anterior deja de funcionar (por si se compartió de más).
+  regeneratePass: {
+    roles: RESIDENT,
+    run(t, { user, sign }, { id }) {
+      const old = t.must('passes', id, 'El pase');
+      if (old.residentId !== user.id) throw forbidden('Sólo quien creó el pase puede cambiar su código.');
+      if (!['Activo', 'Programado'].includes(passStatus(old).label))
+        throw new DomainError('Sólo se cambia el código de un pase vigente. Para uno vencido, usa «Repetir».', 409, 'pass_inactive');
+      const pass = {
+        ...old,
+        id: uid('p_'),
+        code: shortCode(),
+        uses: [],
+        maxUses: old.mode === 'multi' ? old.maxUses - old.uses.length : old.maxUses,
+        replaces: old.id,
+        createdAt: nowIso(),
+      };
+      pass.token = buildToken(pass, sign);
+      t.patch('passes', id, { status: 'revoked', replacedBy: pass.id });
       return t.add('passes', pass);
     },
   },
@@ -788,6 +815,50 @@ export const OPERATIONS = {
       const has = t.get('whatsappOptOuts', user.id);
       if (enabled && has) t.remove('whatsappOptOuts', user.id);
       if (!enabled && !has) t.add('whatsappOptOuts', { id: user.id, at: nowIso() });
+    },
+  },
+
+  // ---------- Casas o departamentos (administración) ----------
+  saveUnit: {
+    roles: ADMIN,
+    run(t, _ctx, { id, label, street }) {
+      const name = label.trim();
+      if (t.next.units.some((u) => u.id !== id && u.label.trim().toLowerCase() === name.toLowerCase()))
+        throw new DomainError(`Ya existe ${name}.`, 409, 'duplicate');
+      if (id) {
+        t.must('units', id, 'La casa');
+        t.patch('units', id, { label: name, street: street?.trim() || '' });
+        t.audit({ action: 'Domicilio actualizado', target: name });
+        return t.get('units', id);
+      }
+      keepUnitNumbers(t);
+      const refNo = Math.max(0, ...t.next.units.map((u) => u.refNo)) + 1;
+      const unit = { id: uid('u_'), label: name, street: street?.trim() || '', refNo, createdAt: nowIso() };
+      t.next.units = [...t.next.units, unit];
+      t.audit({ action: 'Domicilio agregado', target: name });
+      return unit;
+    },
+  },
+  // Sólo se elimina una casa sin residentes ni historial (pagos, pases o visitas); si no, se le cambia el nombre.
+  deleteUnit: {
+    roles: ADMIN,
+    run(t, _ctx, { id }) {
+      const unit = t.must('units', id, 'La casa');
+      const residents = t.next.users.filter((u) => u.role === 'resident' && u.unitId === id).length;
+      if (residents)
+        throw new DomainError(
+          `${unit.label} tiene ${residents} residente(s). Cámbialos de domicilio o elimina sus cuentas primero.`,
+          409,
+          'unit_in_use',
+        );
+      const history = ['payments', 'passes', 'accessLogs', 'packages', 'reservations', 'tags'].some((c) =>
+        (t.next[c] || []).some((x) => x.unitId === id),
+      );
+      if (history)
+        throw new DomainError(`${unit.label} ya tiene pagos, pases o visitas registrados. Puedes cambiarle el nombre.`, 409, 'unit_in_use');
+      keepUnitNumbers(t);
+      t.remove('units', id);
+      t.audit({ action: 'Domicilio eliminado', target: unit.label });
     },
   },
 

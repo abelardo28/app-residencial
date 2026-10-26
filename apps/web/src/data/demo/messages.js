@@ -60,6 +60,17 @@ export const templates = {
       ),
     ];
   },
+  passwordChanged({ user, org }) {
+    return [
+      msg(
+        'email',
+        user.email,
+        `Cambiaste tu contraseña · ${org}`,
+        `Hola ${user.name}, la contraseña de tu cuenta se cambió y cerramos tus sesiones en otros dispositivos. Si no fuiste tú, contacta a tu administrador de inmediato.`,
+        { kind: 'password-changed' },
+      ),
+    ];
+  },
   activated({ user, org }) {
     return [
       msg(

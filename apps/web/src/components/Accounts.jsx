@@ -166,7 +166,7 @@ export function AccountModal({ tenantId, user, selfId, unitText, onClose, allowD
 }
 
 // Alta de usuario: no se escribe contraseña. Se envía la invitación por correo y WhatsApp.
-export function InviteModal({ tenantId, units = [], roles = ['resident', 'guard', 'admin'], defaultRole, onClose }) {
+export function InviteModal({ tenantId, units = [], roles = ['resident', 'guard', 'admin'], defaultRole, onAddUnit, onClose }) {
   const { accounts, toast } = useStore();
   const [f, setF] = useState({
     name: '',
@@ -179,6 +179,17 @@ export function InviteModal({ tenantId, units = [], roles = ['resident', 'guard'
   });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [newUnit, setNewUnit] = useState(null); // texto del domicilio que se está agregando
+  async function addUnit() {
+    if (!newUnit?.trim()) return;
+    try {
+      const u = await onAddUnit({ label: newUnit.trim() });
+      setF((x) => ({ ...x, unitId: u.id }));
+      setNewUnit(null);
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
   const set = (k) => (v) => setF((x) => ({ ...x, [k]: v?.target ? v.target.value : v }));
   async function submit() {
     const data = {
@@ -227,14 +238,40 @@ export function InviteModal({ tenantId, units = [], roles = ['resident', 'guard'
         {f.role === 'resident' && (
           <>
             <Field label="Domicilio">
-              <select className="select" value={f.unitId} onChange={set('unitId')}>
-                {units.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.label}
-                    {u.street ? ` · ${u.street}` : ''}
-                  </option>
-                ))}
-              </select>
+              {newUnit === null ? (
+                <div className="row" style={{ flexWrap: 'nowrap' }}>
+                  <select className="select" style={{ flex: 1 }} value={f.unitId} onChange={set('unitId')}>
+                    {units.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.label}
+                        {u.street ? ` · ${u.street}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {onAddUnit && (
+                    <Button type="button" onClick={() => setNewUnit('')}>
+                      Agregar
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="row" style={{ flexWrap: 'nowrap' }}>
+                  <input
+                    className="input"
+                    style={{ flex: 1 }}
+                    value={newUnit}
+                    onChange={(e) => setNewUnit(e.target.value)}
+                    placeholder="Ej. Casa 13 o Depto 204"
+                    autoFocus
+                  />
+                  <Button type="button" variant="primary" onClick={addUnit}>
+                    Guardar
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setNewUnit(null)}>
+                    Cancelar
+                  </Button>
+                </div>
+              )}
             </Field>
             <Field label="Placas de sus vehículos" hint="Separadas por coma">
               <input className="input mono" value={f.vehicles} onChange={set('vehicles')} />

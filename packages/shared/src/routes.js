@@ -13,6 +13,7 @@ export const OPERATION_ROUTES = {
 
   createPass: { method: 'POST', path: '/passes', args: same },
   revokePass: { method: 'POST', path: '/passes/:id/revoke', args: one('id') },
+  regeneratePass: { method: 'POST', path: '/passes/:id/regenerate', args: one('id') },
 
   checkCode: { method: 'POST', path: '/access/check', args: one('text') },
   registerEntry: { method: 'POST', path: '/access/entries', args: same },
@@ -52,6 +53,8 @@ export const OPERATION_ROUTES = {
 
   updateUser: { method: 'PATCH', path: '/users/:id', args: (id, data) => ({ id, ...data }) },
   updateSettings: { method: 'PATCH', path: '/settings', args: same },
+  saveUnit: { method: 'POST', path: '/units', args: same },
+  deleteUnit: { method: 'DELETE', path: '/units/:id', args: one('id') },
   saveAmenity: { method: 'POST', path: '/amenities', args: same },
   deleteAmenity: { method: 'DELETE', path: '/amenities/:id', args: one('id') },
   saveCharge: { method: 'POST', path: '/charges', args: same },

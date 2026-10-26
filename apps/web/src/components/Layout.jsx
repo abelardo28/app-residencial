@@ -27,6 +27,7 @@ import SosButton from './SosButton';
 import { DemoOutboxButton } from './DemoOutbox';
 import { WhatsappSimButton } from './WhatsappSim';
 import InstallApp from './InstallApp';
+import Profile from './Profile';
 import { initials } from '../lib/utils';
 import { coverOf } from '../lib/cover';
 
@@ -38,6 +39,7 @@ export default function Layout() {
   const address = root.platform.residencias.find((r) => r.id === session.tenantId)?.address;
   const [open, setOpen] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [profile, setProfile] = useState(false);
   const nav = useNavigate();
   const loc = useLocation();
   // Con llaves: en Chrome reciente scrollTo devuelve una promesa y React la tomaría como función de limpieza
@@ -157,12 +159,14 @@ export default function Layout() {
         ))}
         <div style={{ flex: 1 }} />
         <InstallApp className="block" />
-        <div className="row card flat" style={{ padding: 10, gap: 10 }}>
-          <div className="avatar">{initials(me.name)}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 500 }}>{me.name}</div>
-            <div className="faint">{me.role === 'resident' ? unitLabel(db, me.unitId) : ROLE_LABEL[me.role]}</div>
-          </div>
+        <div className="row card flat user-card" style={{ padding: 10, gap: 10 }}>
+          <button type="button" className="user-card-open" onClick={() => setProfile(true)} aria-label="Mi cuenta" title="Mi cuenta">
+            <div className="avatar">{initials(me.name)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 500 }}>{me.name}</div>
+              <div className="faint">{me.role === 'resident' ? unitLabel(db, me.unitId) : ROLE_LABEL[me.role]}</div>
+            </div>
+          </button>
           <button
             className="btn ghost icon-btn"
             title="Cerrar sesión"
@@ -176,6 +180,17 @@ export default function Layout() {
           </button>
         </div>
       </aside>
+      {profile && (
+        <Profile
+          user={me}
+          subtitle={me.role === 'resident' ? `${ROLE_LABEL[me.role]} · ${unitLabel(db, me.unitId)}` : ROLE_LABEL[me.role]}
+          onClose={() => setProfile(false)}
+          onLogout={() => {
+            actions.logout();
+            nav('/');
+          }}
+        />
+      )}
 
       <div className={`main ${cover ? 'has-cover' : ''}`}>
         {cover && (

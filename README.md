@@ -67,6 +67,8 @@ La cámara (escáner QR y foto de placa) sólo funciona en `localhost` o con HTT
   - _Recurrente_: para personal doméstico o trabajadores, con días y horario permitidos (por ejemplo, lunes, miércoles y viernes de 8:00 a 17:00).
 - El código va firmado (`RES1.<id>.<expira>.<firma>`), así que un QR inventado o alterado se rechaza.
 - El residente puede compartir el pase (por WhatsApp, por ejemplo), descargarlo o cancelarlo en cualquier momento.
+- **Nuevo código**: si el QR se compartió de más, el residente genera otro para el mismo pase. El anterior deja de abrir y en caseta aparece «el residente generó uno nuevo».
+- **Repetir**: desde un pase o desde el historial se crea uno nuevo con los mismos datos (visita, tipo, placa, días y horario), sin volver a escribirlos. El historial muestra cada visita una sola vez y tiene buscador.
 - **Caseta**: el vigilante escanea el QR con la cámara o escribe el código. Ve en pantalla si es válido y, si no, por qué (expirado, ya usado, fuera de horario, cancelado).
 - **Lectura automática de placas (OCR)**: el vigilante toma la foto y la placa se escribe sola en el formulario (tesseract.js corre en el navegador). Siempre se puede corregir a mano, y si hay varias lecturas posibles se muestran como sugerencias.
 - **Placa esperada**: si el residente indicó la placa y el vehículo llega con otra, se avisa al residente y a administración.
@@ -144,6 +146,11 @@ npm start
 
 Para dejarlo corriendo al encender la computadora, crea un servicio de systemd con `ExecStart=/usr/bin/node /opt/gate-agent/src/index.js` y `EnvironmentFile=/opt/gate-agent/.env`.
 
+### Domicilios
+
+- En _Residentes y personal → Domicilios_ administración agrega, renombra o elimina casas y departamentos. También se puede agregar uno al dar de alta a un residente, con el botón «Agregar» junto a la lista.
+- Cada domicilio conserva su referencia SPEI aunque se agreguen o quiten otros. Sólo se elimina uno sin residentes ni historial (pagos, pases o visitas).
+
 ### Áreas comunes
 
 - Administración agrega, edita o elimina las áreas que se pueden reservar (_Reservaciones → Nueva área_ o el lápiz de cada una): nombre, horario, capacidad, depósito y reglas.
@@ -167,6 +174,7 @@ Todo se aplica en la API; la APP no decide nada de seguridad.
 - **No hay registro abierto.** La empresa crea cada residencial y a su administrador; el administrador crea a residentes, vigilantes y otros administradores.
 - **Activación con dos canales.** Al crear una cuenta no se asigna contraseña. Se envía un **enlace por correo** (token aleatorio de 256 bits) y un **código de 6 dígitos por WhatsApp**. Para activar se necesitan los dos. Vencen en 48 horas, sirven una vez y la invitación se anula tras 5 códigos incorrectos. Sólo se guardan sus hashes.
 - **Contraseñas** con **Argon2id** (parámetros recomendados por OWASP): 10 caracteres o más, mayúsculas, minúsculas, número y símbolo, sin el nombre ni palabras comunes.
+- **Mi cuenta** (al tocar la tarjeta con tus iniciales): cambias tu nombre y tu contraseña, con la actual. Al cambiarla se cierran tus sesiones en los demás dispositivos y te llega un correo de aviso. El correo y el teléfono los cambia administración, porque por ahí llegan los códigos de acceso.
 - **Recuperación sólo por un administrador.** Al restablecer, la contraseña anterior deja de funcionar, se cierran sus sesiones y se envía un nuevo enlace + código.
 - **Verificación en dos pasos** (código por WhatsApp y correo, 5 minutos) para administradores y personal de la empresa.
 - **Bloqueo** de 15 minutos tras 5 contraseñas incorrectas, con aviso por correo, y **límite de intentos por IP** en las rutas de acceso.

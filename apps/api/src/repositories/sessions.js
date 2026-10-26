@@ -30,6 +30,7 @@ export function sessionsRepository(db) {
     touch: (tokenHash, at) => db.prepare('UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?').run(at, tokenHash),
     delete: (tokenHash) => db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash),
     deleteForUser: (userId) => db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId),
+    deleteOthers: (userId, tokenHash) => db.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').run(userId, tokenHash),
     purgeExpired: (now) => db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(now),
   };
 }

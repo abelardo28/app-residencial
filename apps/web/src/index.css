@@ -1953,3 +1953,22 @@ button.list-item.clickable:hover {
 .install-steps svg {
   vertical-align: -3px;
 }
+
+/* Tarjeta del usuario en el menú: al tocarla se abre «Mi cuenta» */
+.user-card-open {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  border-radius: 10px;
+}
+.user-card-open:focus-visible {
+  outline: 2px solid var(--ink-1);
+  outline-offset: 3px;
+}
+.user-card:hover {
+  border-color: var(--border-strong);
+}

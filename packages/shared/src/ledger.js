@@ -157,9 +157,15 @@ export function debtRestriction(tenant, unitId, what, today) {
 export function unitReference(tenant, unitId) {
   const index = tenant.units.findIndex((u) => u.id === unitId);
   if (index < 0) return '';
-  const base = '1' + String(index + 1).padStart(5, '0');
+  const base = '1' + String(unitNumber(tenant, tenant.units[index])).padStart(5, '0');
   return base + checkDigit(base);
 }
+
+/**
+ * Número fijo de la casa para su referencia. Las casas que se dan de alta desde la app lo guardan (`refNo`);
+ * las creadas con el residencial usan su posición, que se guarda antes de agregar o quitar casas para que nunca cambie.
+ */
+export const unitNumber = (tenant, unit) => unit.refNo ?? tenant.units.indexOf(unit) + 1;
 
 /** Dígito verificador (módulo 10 con pesos 3-7-1, como las referencias bancarias). */
 export function checkDigit(digits) {
@@ -173,6 +179,6 @@ export const validReference = (ref = '') => /^\d{7}$/.test(ref) && checkDigit(re
 /** Busca la casa a la que pertenece una referencia. */
 export function unitByReference(tenant, ref) {
   if (!validReference(ref)) return null;
-  const index = Number(ref.slice(1, 6)) - 1;
-  return tenant.units[index] || null;
+  const n = Number(ref.slice(1, 6));
+  return tenant.units.find((u) => unitNumber(tenant, u) === n) || null;
 }

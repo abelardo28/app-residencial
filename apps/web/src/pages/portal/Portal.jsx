@@ -30,6 +30,7 @@ import { Badge, Button, Card, CardHead, Chips, Field, Modal, PageHead, Stat, Tab
 import { AccountBadge, AccountModal, AuditList, InviteModal, ROLE_NAME } from '../../components/Accounts';
 import { DemoOutboxButton } from '../../components/DemoOutbox';
 import { INVOICE_STATE } from '../../components/Subscription';
+import Profile from '../../components/Profile';
 import { invoiceState } from '@residencial/shared';
 
 const INV = INVOICE_STATE;
@@ -64,6 +65,7 @@ const LINKS = [
 function PortalLayout() {
   const { root, staffMe, actions, toasts } = useStore();
   const [open, setOpen] = useState(false);
+  const [profile, setProfile] = useState(false);
   const loc = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -94,19 +96,22 @@ function PortalLayout() {
           ))}
         </nav>
         <div style={{ flex: 1 }} />
-        <div className="row card flat" style={{ padding: 10, gap: 10 }}>
-          <div className="avatar">{initials(staffMe.name)}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 500 }}>{staffMe.name}</div>
-            <div className="faint" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {staffMe.email}
+        <div className="row card flat user-card" style={{ padding: 10, gap: 10 }}>
+          <button type="button" className="user-card-open" onClick={() => setProfile(true)} aria-label="Mi cuenta" title="Mi cuenta">
+            <div className="avatar">{initials(staffMe.name)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 500 }}>{staffMe.name}</div>
+              <div className="faint" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {staffMe.email}
+              </div>
             </div>
-          </div>
+          </button>
           <button className="btn ghost icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={actions.logout}>
             <LogOut size={17} />
           </button>
         </div>
       </aside>
+      {profile && <Profile user={staffMe} subtitle="Empresa" onClose={() => setProfile(false)} onLogout={actions.logout} />}
       <div className="main">
         <header className="topbar">
           <button className="btn ghost icon-btn menu-btn" onClick={() => setOpen(true)} aria-label="Menú">

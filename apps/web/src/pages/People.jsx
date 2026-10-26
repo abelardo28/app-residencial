@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Plus, Search, ChevronRight, ShieldCheck } from 'lucide-react';
+import { Plus, Search, ChevronRight, ShieldCheck, Home } from 'lucide-react';
 import { useStore, unitLabel } from '../data/store';
 import { initials } from '../lib/utils';
 import { Badge, Button, Card, CardHead, PageHead, Tabs } from '../components/ui';
 import { AccountBadge, AccountModal, AuditList, InviteModal, ROLE_NAME } from '../components/Accounts';
 import { ledger } from '@residencial/shared';
+import Units, { byLabel } from '../components/Units';
 
 export default function People() {
-  const { db, me, root, session } = useStore();
+  const { db, me, root, session, actions } = useStore();
   const [tab, setTab] = useState('resident');
   const [q, setQ] = useState('');
   const [adding, setAdding] = useState(false);
@@ -26,7 +27,9 @@ export default function People() {
       <PageHead
         title="Residentes y personal"
         subtitle="Tú creas las cuentas; cada persona recibe su invitación por correo y WhatsApp."
-        fab={tab !== 'audit' ? { icon: <Plus size={18} />, label: 'Nuevo usuario', onClick: () => setAdding(true) } : null}
+        fab={
+          !['audit', 'units'].includes(tab) ? { icon: <Plus size={18} />, label: 'Nuevo usuario', onClick: () => setAdding(true) } : null
+        }
       >
         <Button variant="primary" onClick={() => setAdding(true)}>
           <Plus size={16} /> Nuevo usuario
@@ -42,13 +45,16 @@ export default function People() {
               label: { resident: 'Residentes', guard: 'Vigilantes', admin: 'Administradores' }[value],
               count: db.users.filter((u) => u.role === value).length,
             })),
+            { value: 'units', label: 'Domicilios', icon: <Home size={14} />, count: db.units.length },
             { value: 'audit', label: 'Seguridad', icon: <ShieldCheck size={14} /> },
           ]}
         />
         {pending > 0 && <Badge tone="warn">{pending} por activar</Badge>}
       </div>
 
-      {tab === 'audit' ? (
+      {tab === 'units' ? (
+        <Units />
+      ) : tab === 'audit' ? (
         <Card>
           <CardHead title="Actividad de seguridad" subtitle="Inicios de sesión, intentos fallidos, invitaciones y cambios de cuentas." />
           <AuditList items={audit} />
@@ -97,8 +103,9 @@ export default function People() {
       {adding && (
         <InviteModal
           tenantId={tenantId}
-          units={db.units}
-          defaultRole={tab === 'audit' ? 'resident' : tab}
+          units={[...db.units].sort(byLabel)}
+          onAddUnit={actions.saveUnit}
+          defaultRole={['audit', 'units'].includes(tab) ? 'resident' : tab}
           onClose={() => setAdding(false)}
         />
       )}

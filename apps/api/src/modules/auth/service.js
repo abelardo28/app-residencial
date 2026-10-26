@@ -209,6 +209,34 @@ export function createAuthService({ repos, templates, dispatch }) {
       return { session: { ...s, token, restricted: suspended }, account: acc };
     },
 
+    /** La propia persona cambia su nombre. El correo y el teléfono (por donde llega el código) los cambia administración. */
+    updateProfile(acc, { name }) {
+      accounts.update(acc.id, { name });
+      audit({ ...acc, name }, { action: 'Perfil actualizado', target: acc.name === name ? acc.email : `${acc.name} → ${name}` });
+      return { name };
+    },
+
+    /** Cambia la contraseña con la actual y cierra las demás sesiones de la persona (la actual sigue abierta). */
+    async changePassword(acc, token, { current, password }) {
+      const ok = acc.passwordHash ? await verifyPassword(acc.passwordHash, current) : false;
+      if (!ok) {
+        audit(acc, { action: 'Cambio de contraseña con la contraseña actual incorrecta', severity: 'warn' });
+        throw new HttpError(400, 'La contraseña actual no es correcta.', 'wrong_password');
+      }
+      if (current === password) throw new HttpError(400, 'La nueva contraseña debe ser distinta de la actual.', 'same_password');
+      const issues = passwordIssues(password, acc);
+      if (issues.length) throw new HttpError(400, 'La contraseña no cumple: ' + issues.join(', ').toLowerCase(), 'weak_password');
+      const passwordHash = await hashPassword(password);
+      transaction(repos.db, () => {
+        accounts.update(acc.id, { passwordHash, passwordChangedAt: new Date().toISOString() });
+        sessions.deleteOthers(acc.id, sha256(token));
+        platform.enqueue(templates.passwordChanged({ user: acc, org: orgName(acc) }));
+        audit(acc, { action: 'Contraseña cambiada' });
+      });
+      dispatch();
+      return { ok: true };
+    },
+
     logout(token, acc) {
       if (!token) return;
       sessions.delete(sha256(token));

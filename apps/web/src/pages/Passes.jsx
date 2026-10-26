@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { Plus, QrCode, Share2, Download, Ban, Clock, Repeat, Car } from 'lucide-react';
+import { Plus, QrCode, Share2, Download, Ban, Clock, Repeat, Car, RefreshCw, CopyPlus, Search } from 'lucide-react';
 import { useStore } from '../data/store';
 import { debtRestriction } from '@residencial/shared';
 import { PASS_TYPES, passStatus } from '@residencial/shared';
@@ -24,14 +24,26 @@ export function describeValidity(p) {
 }
 
 export default function Passes() {
-  const { db, me, actions } = useStore();
+  const { db, me, actions, toast } = useStore();
   const [tab, setTab] = useState('active');
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(false); // true o el pase que se repite
   const [viewing, setViewing] = useState(null);
+  const [q, setQ] = useState('');
 
-  const mine = db.passes.filter((p) => p.unitId === me.unitId);
+  const mine = db.passes.filter((p) => p.unitId === me.unitId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const active = mine.filter((p) => ['Activo', 'Programado'].includes(passStatus(p).label));
-  const history = mine.filter((p) => !active.includes(p));
+  // En el historial sólo queda el pase más reciente de cada visita (los códigos cambiados no se repiten)
+  const term = q.trim().toLowerCase();
+  const seen = new Set();
+  const history = mine
+    .filter((p) => !active.includes(p) && !p.replacedBy)
+    .filter((p) => {
+      const key = `${p.visitorName.trim().toLowerCase()}|${p.type}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .filter((p) => !term || [p.visitorName, p.expectedPlate, p.notes].some((x) => x?.toLowerCase().includes(term)));
   const list = tab === 'active' ? active : history;
   const limited = debtRestriction(db, me.unitId, 'recurrentPasses');
 
@@ -61,8 +73,28 @@ export default function Passes() {
           ]}
         />
       </div>
+      {tab === 'history' && (
+        <div className="input-wrap" style={{ marginBottom: 12 }}>
+          <Search size={16} className="input-icon" />
+          <input
+            className="input with-icon"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar visita, placa o indicación"
+          />
+        </div>
+      )}
       <Card>
-        {list.length === 0 && <Empty icon={<QrCode />}>{tab === 'active' ? 'No tienes pases vigentes.' : 'Aún no hay historial.'}</Empty>}
+        {list.length === 0 && (
+          <Empty icon={<QrCode />}>
+            {tab === 'active' ? 'No tienes pases vigentes.' : term ? 'Sin resultados.' : 'Aún no hay historial.'}
+          </Empty>
+        )}
+        {tab === 'history' && list.length > 0 && (
+          <p className="faint" style={{ marginBottom: 8 }}>
+            Cada visita aparece una vez. Usa «Repetir» para darle un pase nuevo con los mismos datos.
+          </p>
+        )}
         <div className="list cols-lg">
           {list.map((p) => {
             const st = passStatus(p);
@@ -81,6 +113,11 @@ export default function Passes() {
                   )}
                 </div>
                 <Badge tone={st.tone}>{st.label}</Badge>
+                {tab === 'history' && (
+                  <Button size="sm" variant="primary" onClick={() => setCreating(p)}>
+                    <CopyPlus size={14} /> Repetir
+                  </Button>
+                )}
                 <Button size="sm" onClick={() => setViewing(p)}>
                   Ver
                 </Button>
@@ -92,6 +129,7 @@ export default function Passes() {
 
       {creating && (
         <CreatePass
+          from={creating === true ? null : creating}
           onClose={() => setCreating(false)}
           onCreated={(p) => {
             setCreating(false);
@@ -109,28 +147,50 @@ export default function Passes() {
               () => {},
             )
           }
+          onRegenerate={(id) =>
+            window.confirm('El código y el QR actuales dejarán de funcionar. Tendrás que compartir el nuevo. ¿Continuar?') &&
+            actions.regeneratePass(id).then(
+              (p) => {
+                toast('Código nuevo', 'Comparte el nuevo QR con tu visita; el anterior ya no abre.');
+                setViewing(p);
+              },
+              () => {},
+            )
+          }
+          onRepeat={(p) => {
+            setViewing(null);
+            setCreating(p);
+          }}
         />
       )}
     </>
   );
 }
 
-function CreatePass({ onClose, onCreated }) {
+/** Duración del pase original, para repetirlo con la misma (o «Personalizado» si no coincide con las opciones). */
+function sameDuration(p) {
+  const h = Math.round((new Date(p.validTo) - new Date(p.validFrom)) / 3600e3);
+  return DURATIONS.some((d) => d.value === h) ? h : 0;
+}
+
+function CreatePass({ from, onClose, onCreated }) {
   const { actions } = useStore();
+  const span = from ? new Date(from.validTo) - new Date(from.validFrom) : 4 * 3600e3;
+  const recurrentDays = from?.mode === 'recurrent' ? Math.max(1, Math.round(span / 864e5)) : 30;
   const [f, setF] = useState({
-    visitorName: '',
-    type: 'familiar',
-    mode: 'single',
+    visitorName: from?.visitorName || '',
+    type: from?.type || 'familiar',
+    mode: from?.mode || 'single',
     start: toLocalInput(new Date()),
-    hours: 4,
-    end: toLocalInput(Date.now() + 4 * 3600e3),
-    maxUses: 2,
-    days: [1, 2, 3, 4, 5],
-    timeFrom: '08:00',
-    timeTo: '18:00',
-    untilDate: new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10),
-    expectedPlate: '',
-    notes: '',
+    hours: from && from.mode !== 'recurrent' ? sameDuration(from) : 4,
+    end: toLocalInput(Date.now() + span),
+    maxUses: from?.mode === 'multi' ? from.maxUses : 2,
+    days: from?.mode === 'recurrent' ? from.days : [1, 2, 3, 4, 5],
+    timeFrom: from?.mode === 'recurrent' ? from.timeFrom : '08:00',
+    timeTo: from?.mode === 'recurrent' ? from.timeTo : '18:00',
+    untilDate: new Date(Date.now() + recurrentDays * 864e5).toISOString().slice(0, 10),
+    expectedPlate: from?.expectedPlate || '',
+    notes: from?.notes || '',
   });
   const set = (k) => (v) => setF((x) => ({ ...x, [k]: v?.target ? v.target.value : v }));
   const [err, setErr] = useState('');
@@ -170,7 +230,7 @@ function CreatePass({ onClose, onCreated }) {
 
   return (
     <Modal
-      title="Nuevo pase de acceso"
+      title={from ? `Repetir pase · ${from.visitorName}` : 'Nuevo pase de acceso'}
       onClose={onClose}
       footer={
         <>
@@ -185,7 +245,7 @@ function CreatePass({ onClose, onCreated }) {
     >
       <div className="stack">
         <Field label="¿Quién te visita?">
-          <input className="input" value={f.visitorName} onChange={set('visitorName')} placeholder="Nombre o empresa" autoFocus />
+          <input className="input" value={f.visitorName} onChange={set('visitorName')} placeholder="Nombre o empresa" autoFocus={!from} />
         </Field>
         <Field label="Tipo de visita">
           <Chips value={f.type} onChange={set('type')} options={Object.entries(PASS_TYPES).map(([value, label]) => ({ value, label }))} />
@@ -256,7 +316,7 @@ function CreatePass({ onClose, onCreated }) {
   );
 }
 
-function PassView({ pass, onClose, onRevoke }) {
+function PassView({ pass, onClose, onRevoke, onRegenerate, onRepeat }) {
   const { db } = useStore();
   const ref = useRef();
   const [big, setBig] = useState(false);
@@ -344,11 +404,21 @@ function PassView({ pass, onClose, onRevoke }) {
         <Button onClick={download}>
           <Download size={16} /> Descargar
         </Button>
+        {!pass.replacedBy && (
+          <Button onClick={() => onRepeat(pass)}>
+            <CopyPlus size={16} /> Repetir
+          </Button>
+        )}
         <div style={{ flex: 1 }} />
         {(st.tone === 'ok' || st.tone === 'info') && (
-          <Button variant="ghost" className="danger" onClick={() => onRevoke(pass.id)}>
-            <Ban size={16} /> Cancelar pase
-          </Button>
+          <>
+            <Button variant="ghost" onClick={() => onRegenerate(pass.id)} title="El código anterior deja de funcionar">
+              <RefreshCw size={16} /> Nuevo código
+            </Button>
+            <Button variant="ghost" className="danger" onClick={() => onRevoke(pass.id)}>
+              <Ban size={16} /> Cancelar pase
+            </Button>
+          </>
         )}
       </div>
     </Modal>

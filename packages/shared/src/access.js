@@ -33,7 +33,11 @@ export function parseInput(text, sign) {
 /** Determina si un pase puede usarse en este momento. */
 export function evaluatePass(pass, now = new Date()) {
   if (!pass) return { ok: false, reason: 'Código no encontrado' };
-  if (pass.status === 'revoked') return { ok: false, reason: 'El residente canceló este pase' };
+  if (pass.status === 'revoked')
+    return {
+      ok: false,
+      reason: pass.replacedBy ? 'Este código ya no es válido: el residente generó uno nuevo' : 'El residente canceló este pase',
+    };
   if (pass.mode === 'single' && pass.uses.length > 0) return { ok: false, reason: 'Este código ya fue utilizado' };
   if (pass.mode === 'multi' && pass.uses.length >= pass.maxUses) return { ok: false, reason: 'Se agotaron los usos de este código' };
   const from = new Date(pass.validFrom);
@@ -49,7 +53,7 @@ export function evaluatePass(pass, now = new Date()) {
 }
 
 export function passStatus(pass, now = new Date()) {
-  if (pass.status === 'revoked') return { label: 'Cancelado', tone: 'bad' };
+  if (pass.status === 'revoked') return pass.replacedBy ? { label: 'Código cambiado', tone: '' } : { label: 'Cancelado', tone: 'bad' };
   if (pass.mode === 'single' && pass.uses.length) return { label: 'Utilizado', tone: '' };
   if (pass.mode === 'multi' && pass.uses.length >= pass.maxUses) return { label: 'Utilizado', tone: '' };
   if (now > new Date(pass.validTo)) return { label: 'Expirado', tone: '' };

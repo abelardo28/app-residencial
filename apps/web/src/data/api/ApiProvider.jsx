@@ -141,6 +141,12 @@ export default function ApiProvider({ children }) {
         setAuthNotice('');
       },
       clearNotice: () => setAuthNotice(''),
+      updateProfile: (input) =>
+        result(async () => {
+          await api.patch('/me/profile', input);
+          await refresh();
+        }),
+      changePassword: (input) => result(() => api.post('/me/password', input)),
     };
   }, [api, refresh]);
 

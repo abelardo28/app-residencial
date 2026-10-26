@@ -110,7 +110,7 @@ function Side({ portal }) {
   );
 }
 
-function PasswordInput({ value, onChange, autoComplete, autoFocus, placeholder }) {
+export function PasswordInput({ value, onChange, autoComplete, autoFocus, placeholder }) {
   const [show, setShow] = useState(false);
   return (
     <div className="input-wrap">
