@@ -65,7 +65,9 @@ function PortalLayout() {
   const { root, staffMe, actions, toasts } = useStore();
   const [open, setOpen] = useState(false);
   const loc = useLocation();
-  useEffect(() => window.scrollTo(0, 0), [loc.pathname]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [loc.pathname]);
   const overdue = root.platform.invoices.filter((i) => ['overdue', 'review'].includes(invoiceState(i))).length;
   const current = LINKS.find(([to]) => (to === '/' ? loc.pathname === '/' : loc.pathname.startsWith(to)));
   return (

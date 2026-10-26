@@ -40,7 +40,10 @@ export default function Layout() {
   const [showNotifs, setShowNotifs] = useState(false);
   const nav = useNavigate();
   const loc = useLocation();
-  useEffect(() => window.scrollTo(0, 0), [loc.pathname, me.id]);
+  // Con llaves: en Chrome reciente scrollTo devuelve una promesa y React la tomaría como función de limpieza
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [loc.pathname, me.id]);
 
   const unread = db.notifications.filter((n) => n.userId === me.id && !n.read).length;
   const pendingPays = db.payments.filter((p) => p.status === 'pending').length;
