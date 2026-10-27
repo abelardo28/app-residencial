@@ -963,6 +963,10 @@ td {
 }
 
 @media (max-width: 760px) {
+  :root {
+    /* La barra inferior entra un poco en la franja del indicador de inicio del iPhone para quedar más abajo */
+    --nav-bottom: max(8px, calc(env(safe-area-inset-bottom) - 16px));
+  }
   body {
     font-size: 15px;
   }
@@ -986,7 +990,7 @@ td {
     position: fixed;
     left: 10px;
     right: 10px;
-    bottom: calc(10px + env(safe-area-inset-bottom));
+    bottom: var(--nav-bottom);
     z-index: 35;
     display: grid;
     grid-auto-flow: column;
@@ -1035,7 +1039,7 @@ td {
     color: #fff;
   }
   .content {
-    padding: 16px 14px calc(104px + env(safe-area-inset-bottom));
+    padding: 16px 14px calc(94px + var(--nav-bottom));
   }
   .topbar {
     padding: 10px 14px;
@@ -1067,7 +1071,7 @@ td {
   .fab {
     position: fixed;
     right: 18px;
-    bottom: calc(92px + env(safe-area-inset-bottom));
+    bottom: calc(82px + var(--nav-bottom));
     z-index: 34;
     display: inline-flex;
     align-items: center;
@@ -1214,7 +1218,7 @@ td {
   }
   .sticky-action {
     position: sticky;
-    bottom: calc(88px + env(safe-area-inset-bottom));
+    bottom: calc(78px + var(--nav-bottom));
     z-index: 5;
     box-shadow: 0 10px 26px rgba(28, 26, 23, 0.28);
   }
