@@ -62,3 +62,38 @@ export function passStatus(pass, now = new Date()) {
 }
 
 export const normalizePlate = (p = '') => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+const sameDate = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+
+/**
+ * Lo que pasó hoy para una casa: sus visitas y, por cada servicio general del residencial
+ * (basura, pipa, gas…), su entrada de hoy o, si aún no entra, la última vez que vino.
+ */
+export function todayFor(tenant, unitId, now = new Date()) {
+  const logs = [...tenant.accessLogs].sort((a, b) => b.at.localeCompare(a.at));
+  const general = logs.filter((l) => l.kind === 'general');
+  const names = [
+    ...new Set([...(tenant.settings.generalProviders || []), ...general.filter((l) => sameDate(l.at, now)).map((l) => l.visitorName)]),
+  ];
+  return {
+    visits: logs.filter((l) => l.unitId === unitId && sameDate(l.at, now)),
+    services: names.map((name) => {
+      const mine = general.filter((l) => l.visitorName === name);
+      const today = mine.find((l) => sameDate(l.at, now)) || null;
+      return { name, today, last: today || mine[0] || null };
+    }),
+  };
+}
+
+const plain = (s = '') => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const IGNORED = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'agua', 'servicio', 'mantenimiento']);
+
+/** Servicio general que menciona un texto libre («¿ya pasó la basura?» → «Recolección de basura»). */
+export function providerIn(tenant, text) {
+  const words = new Set(plain(text).split(/[^a-z0-9]+/));
+  return (tenant.settings.generalProviders || []).find((name) =>
+    plain(name)
+      .split(/[^a-z0-9]+/)
+      .some((w) => w.length >= 3 && !IGNORED.has(w) && words.has(w)),
+  );
+}

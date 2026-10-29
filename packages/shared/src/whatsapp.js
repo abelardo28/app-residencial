@@ -4,6 +4,7 @@
 import { fmtDate, fmtTime, money } from './format.js';
 import { debtOf, payableRows, unitReference } from './ledger.js';
 import { bankAccounts } from './bank.js';
+import { providerIn, todayFor } from './access.js';
 
 /** Minutos que se recuerda una conversación a medias (p. ej. "¿cómo se llama tu visita?"). */
 export const BOT_STATE_MINUTES = 30;
@@ -28,7 +29,6 @@ const clean = (s = '') =>
     .replace(/\s+/g, ' ')
     .trim();
 const firstName = (name = '') => name.split(' ')[0];
-const sameDay = (a, b) => a.toDateString() === b.toDateString();
 const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 0);
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
 
@@ -89,6 +89,11 @@ export function botTurn({ tenant, user, text, state = null, now = new Date(), ex
   if (['2', 'saldo', 'pagar', 'pago', 'adeudo', 'referencia', 'estado de cuenta'].includes(msg)) return reply(balance(tenant, user, links));
   if (['3', 'avisos', 'aviso', 'noticias'].includes(msg)) return reply(notices(tenant, links));
   if (['4', 'visitas', 'accesos', 'entradas'].includes(msg)) return reply(visitsToday(tenant, user, now));
+  // Preguntas libres: «¿ya pasó la basura?», «¿ya entró alguien a mi casa?»
+  const provider = providerIn(tenant, text);
+  if (provider) return reply(serviceToday(tenant, user, provider, now));
+  if (/\b(entro|entraron|llego|llegaron|paso|vino|vinieron|alguien|visita|visitas|ingreso)\b/.test(msg))
+    return reply(visitsToday(tenant, user, now));
   return reply(['No entendí tu mensaje.', menu(org, user)]);
 }
 
@@ -100,9 +105,9 @@ function menu(org, user) {
     '*1* Pase para una visita',
     '*2* Mi saldo y cómo pagar',
     '*3* Avisos recientes',
-    '*4* Mis visitas de hoy',
+    '*4* ¿Quién entró hoy? (visitas y servicios)',
     '',
-    'Responde con el número. También puedes escribir, por ejemplo: *pase Juan Pérez*.',
+    'Responde con el número. También puedes escribir, por ejemplo: *pase Juan Pérez* o *¿ya pasó la basura?*',
   ].join('\n');
 }
 
@@ -174,13 +179,26 @@ function notices(tenant, links) {
   ].join('\n');
 }
 
+const when = (l) => `${fmtTime(l.at)}${l.exitAt ? ` (salió ${fmtTime(l.exitAt)})` : ''}`;
+
 function visitsToday(tenant, user, now) {
-  const logs = tenant.accessLogs.filter((a) => a.unitId === user.unitId && sameDay(new Date(a.at), now));
-  if (!logs.length) return 'Hoy no ha llegado ninguna visita a tu casa.';
+  const { visits, services } = todayFor(tenant, user.unitId, now);
+  const came = services.filter((s) => s.today);
   return [
-    '*Visitas de hoy*',
-    ...logs.map((a) => `• ${fmtTime(a.at)} ${a.visitorName}${a.exitAt ? ` (salió ${fmtTime(a.exitAt)})` : ''}`),
-  ].join('\n');
+    visits.length
+      ? ['*Visitas de hoy a tu casa*', ...visits.map((a) => `• ${a.visitorName} · ${when(a)}`)].join('\n')
+      : 'Hoy no ha entrado ninguna visita a tu casa.',
+    came.length
+      ? ['*Servicios de hoy*', ...came.map((s) => `• ${s.name} · ${when(s.today)}`)].join('\n')
+      : 'Hoy no ha entrado ningún servicio general (basura, pipa, gas…).',
+  ].join('\n\n');
+}
+
+function serviceToday(tenant, user, name, now) {
+  const s = todayFor(tenant, user.unitId, now).services.find((x) => x.name === name);
+  if (s.today) return `Sí, *${name}* entró hoy a las ${when(s.today)}.`;
+  const last = s.last ? ` La última vez fue el ${fmtDate(s.last.at, { year: undefined })} a las ${fmtTime(s.last.at)}.` : '';
+  return `Hoy todavía no entra *${name}*.${last} Cuando entre te llegará un aviso en la app.`;
 }
 
 function adminSummary(tenant, links) {

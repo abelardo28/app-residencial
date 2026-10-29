@@ -1,8 +1,21 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { QrCode, Wallet, Megaphone, Package, DoorOpen, CalendarDays, ArrowRight, Vote, Wrench, MessageCircle } from 'lucide-react';
+import {
+  QrCode,
+  Wallet,
+  Megaphone,
+  Package,
+  DoorOpen,
+  CalendarDays,
+  ArrowRight,
+  Vote,
+  Wrench,
+  MessageCircle,
+  Check,
+  Clock,
+} from 'lucide-react';
 import { useStore, unitLabel } from '../data/store';
-import { gateSettings, passStatus } from '@residencial/shared';
+import { gateSettings, passStatus, todayFor } from '@residencial/shared';
 import { money, timeAgo, fmtTime } from '../lib/utils';
 import { Badge, Button, Card, CardHead, Empty, Stat } from '../components/ui';
 import { barrierState } from '../components/GateControls';
@@ -40,6 +53,8 @@ export default function ResidentHome() {
       )}
 
       <ArrivalAndWhatsapp />
+
+      <TodayCard />
 
       <div className="quick-actions show-sm">
         {[
@@ -234,5 +249,41 @@ function ArrivalAndWhatsapp() {
         </Card>
       )}
     </div>
+  );
+}
+
+/** Respuesta rápida a «¿ya entró alguien?» y «¿ya pasó la basura?». */
+function TodayCard() {
+  const { db, me } = useStore();
+  const { visits, services } = todayFor(db, me.unitId);
+  const inside = visits.filter((v) => !v.exitAt).length;
+  const sorted = [...services].sort((a, b) => Number(!!b.today) - Number(!!a.today));
+  return (
+    <Card className="today-card">
+      <CardHead title="Hoy">
+        <Link to="/accesos" className="btn ghost sm">
+          Historial <ArrowRight size={14} />
+        </Link>
+      </CardHead>
+      <div className="today-home">
+        <DoorOpen size={16} />
+        {visits.length
+          ? `${visits.length} ${visits.length === 1 ? 'visita' : 'visitas'} a tu casa${inside ? ` · ${inside} dentro` : ''} · la última a las ${fmtTime(visits[0].at)}`
+          : 'Hoy no ha entrado ninguna visita a tu casa.'}
+      </div>
+      <div className="today-services">
+        {sorted.map((s) => (
+          <span
+            key={s.name}
+            className={`today-service ${s.today ? 'on' : ''}`}
+            title={s.last && !s.today ? `Última vez: ${timeAgo(s.last.at)}` : undefined}
+          >
+            {s.today ? <Check size={14} /> : <Clock size={14} />}
+            {s.name}
+            <b>{s.today ? fmtTime(s.today.at) : 'aún no'}</b>
+          </span>
+        ))}
+      </div>
+    </Card>
   );
 }

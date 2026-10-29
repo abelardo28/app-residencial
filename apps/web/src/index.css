@@ -2187,3 +2187,37 @@ tr.tap {
   border: 1px solid var(--border);
   border-radius: 16px;
 }
+
+/* Inicio del residente: lo que entró hoy */
+.today-card {
+  margin-bottom: 16px;
+}
+.today-home {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.today-services {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.today-service {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: 13px;
+}
+.today-service b {
+  font-weight: 500;
+}
+.today-service.on {
+  color: var(--ok);
+  background: var(--ok-bg);
+  border-color: transparent;
+}
