@@ -6,6 +6,7 @@ import { debtRestriction } from '@residencial/shared';
 import { PASS_TYPES, passStatus } from '@residencial/shared';
 import { DAYS, fmtDateTime, toLocalInput, fmtTime } from '../lib/utils';
 import { Badge, Button, Card, Chips, Empty, Field, Modal, PageHead, Tabs } from '../components/ui';
+import { passImage, saveFile } from '../lib/passImage';
 
 const DURATIONS = [
   { value: 2, label: '2 horas' },
@@ -325,32 +326,60 @@ function CreatePass({ from, onClose, onCreated }) {
 }
 
 function PassView({ pass, onClose, onRevoke, onRegenerate, onRepeat }) {
-  const { db } = useStore();
-  const ref = useRef();
+  const { db, toast } = useStore();
+  const hiRes = useRef(); // QR grande, fuera de pantalla, para la imagen
   const [big, setBig] = useState(false);
+  const [busy, setBusy] = useState(false);
   const st = passStatus(pass);
   const shareText = `${db.settings.name}\nPase para: ${pass.visitorName}\nCódigo: ${pass.code}\nVigencia: ${describeValidity(pass)}\nMuestra este código en caseta.`;
+  const slug = pass.visitorName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+  const fileName = `pase-${slug || 'visita'}-${pass.code}.png`;
+
+  /** La tarjeta del pase como imagen, con los mismos datos que la vista previa. */
+  const image = () =>
+    passImage({
+      qr: hiRes.current.querySelector('canvas'),
+      org: db.settings.name,
+      visitor: pass.visitorName,
+      type: PASS_TYPES[pass.type],
+      status: st.label,
+      code: pass.code,
+      details: [
+        `Vigencia: ${describeValidity(pass)}`,
+        ...(pass.mode === 'multi' ? [`Entradas: ${pass.uses.length} de ${pass.maxUses} usadas`] : []),
+        ...(pass.expectedPlate ? [`Placa esperada: ${pass.expectedPlate}`] : []),
+      ],
+    });
 
   async function share() {
-    const canvas = ref.current?.querySelector('canvas');
+    setBusy(true);
     try {
-      if (canvas && navigator.canShare) {
-        const blob = await new Promise((r) => canvas.toBlob(r));
-        const file = new File([blob], `pase-${pass.code}.png`, { type: 'image/png' });
-        if (navigator.canShare({ files: [file] })) return await navigator.share({ files: [file], text: shareText });
-      }
+      const file = new File([await image()], fileName, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) return await navigator.share({ files: [file], text: shareText });
       if (navigator.share) return await navigator.share({ text: shareText });
       await navigator.clipboard.writeText(shareText);
-      alert('Datos del pase copiados. Pégalos en WhatsApp o mensaje.');
-    } catch {
-      /* el usuario canceló */
+      toast('Datos del pase copiados', 'Pégalos en WhatsApp o en un mensaje.');
+    } catch (e) {
+      if (e?.name !== 'AbortError') toast('No se pudo compartir', 'Usa «Descargar» y envía la imagen.', 'bad');
+    } finally {
+      setBusy(false);
     }
   }
-  function download() {
-    const a = document.createElement('a');
-    a.href = ref.current.querySelector('canvas').toDataURL('image/png');
-    a.download = `pase-${pass.code}.png`;
-    a.click();
+  async function download() {
+    setBusy(true);
+    try {
+      const how = await saveFile(await image(), fileName);
+      if (how === 'downloaded') toast('Imagen descargada', fileName);
+    } catch (e) {
+      if (e?.name !== 'AbortError') toast('No se pudo descargar', 'Inténtalo de nuevo.', 'bad');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -366,7 +395,10 @@ function PassView({ pass, onClose, onRevoke, onRegenerate, onRepeat }) {
             {st.label}
           </span>
         </div>
-        <div style={{ display: 'grid', placeItems: 'center', margin: '20px 0 12px', position: 'relative' }} ref={ref}>
+        <div ref={hiRes} aria-hidden="true" style={{ position: 'absolute', left: -10000, top: 0 }}>
+          <QRCodeCanvas value={pass.token} size={816} level="M" marginSize={0} />
+        </div>
+        <div style={{ display: 'grid', placeItems: 'center', margin: '20px 0 12px', position: 'relative' }}>
           <div
             className="qr"
             onClick={() => setBig(true)}
@@ -406,10 +438,10 @@ function PassView({ pass, onClose, onRevoke, onRegenerate, onRepeat }) {
         </div>
       )}
       <div className="row" style={{ marginTop: 16 }}>
-        <Button variant="primary" onClick={share}>
+        <Button variant="primary" onClick={share} disabled={busy}>
           <Share2 size={16} /> Compartir
         </Button>
-        <Button onClick={download}>
+        <Button onClick={download} disabled={busy}>
           <Download size={16} /> Descargar
         </Button>
         {!pass.replacedBy && (
